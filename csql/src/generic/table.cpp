@@ -26,6 +26,7 @@ std::shared_ptr<Table> Table::create(std::shared_ptr<CreateStatement> createStat
 
 void Table::addColumn(std::shared_ptr<Column> column) {
   columns_.push_back(column);
+  column->table_ = shared_from_this();
 }
 
 size_t Table::size() const {

@@ -31,6 +31,7 @@ class Column {
 
   const ColumnType& type() const;
   friend std::ostream& operator<<(std::ostream& stream, const Column& column);
+  friend class Table;
 
  private:
   ColumnType column_type_;

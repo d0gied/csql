@@ -66,27 +66,28 @@ int32_t Column::maxValue() const {
     throw std::runtime_error("Invalid type, expected INT32");
   }
   auto table = table_.lock();
+  if (!table) {
+    throw std::runtime_error("Table not found");
+  }
   if (table->size() == 0) {
-    return 1;
+    return 0;
   }
   auto iter = table->getIterator();
-  int32_t max = 1;
+  int32_t max = 0;
   while (iter->hasNext()) {
     auto row = iter->next();
     if (row->isNull(name_)) continue;
     int32_t value = row->get<int32_t>(name_);
     if (value > max) max = value;
   }
-  return 0;
+  return max;
 }
 
 std::shared_ptr<Value> Column::createValue() const {
   if (default_value_ != nullptr) return std::make_shared<Value>(column_type_, default_value_);
   if (column_type_.data_type == DataType::INT32 && is_autoincrement_) {
-    printf("maxValue() + 1\n");
     return std::make_shared<Value>(column_type_, new int32_t(maxValue() + 1));
   }
-  printf("nullptr");
   return std::make_shared<Value>(column_type_, nullptr);
 }
 

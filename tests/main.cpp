@@ -11,13 +11,13 @@ int main() {
       "\"hello\", password_hash: bytes[8] = 0x0011223344556677, is_admin: bool = false)");
 
   db.execute(
-      "insert (id=1, login=\"admin\", password_hash=0x0011223344556677, is_admin=true) to "
+      "insert (login=\"admin\", password_hash=0x0011223344556677, is_admin=true) to "
       "users");
   db.execute(
-      "insert (id=2, login=\"user1\", password_hash=0x0011223344556677) to "
+      "insert (login=\"user1\", password_hash=0x0011223344556677) to "
       "users");
   db.execute(
-      "insert (id=3, login=\"user2\", password_hash=0x2233445566778899) to "
+      "insert (login=\"user2\", password_hash=0x2233445566778899) to "
       "users");
 
   db.exportTableToCSV("users", "users.csv");
