@@ -1,490 +1,297 @@
-#include "parser.h"
+#include "sql/parser.h"
 
-#include <algorithm>
+#include <boost/regex.hpp>
 #include <cstring>
-#include <iostream>
-#include <sstream>
+#include <string>
+#include <unordered_set>
+
+#include "sql/column_type.h"
+#include "sql/parser_result.h"
+#include "sql/statements/create.h"
+#include "sql/statements/insert.h"
+#include "sql/tokenizer.h"
 
 namespace {
 
-const std::string SPECIAL_CHARS = "()=<>+-*/%|&^~,;:{}";
-
-std::string lower(const std::string &str) {
-  std::string lower_str = str;
-  std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(), ::tolower);
-  return lower_str;
-}
-
-std::string get_lower(const std::vector<std::string> &tokens, size_t index) {
-  if (index >= tokens.size()) {
-    return "";
+csql::ColumnType columnTypeFromString(const std::string &type) {
+  if (type == "BOOL") {
+    return csql::ColumnType(csql::DataType::BOOL);
+  } else if (type == "INT32") {
+    return csql::ColumnType(csql::DataType::INT32);
+  } else if (type.length() > 6 && type.substr(0, 6) == "STRING") {  // string[32]
+    int64_t length = std::stoll(type.substr(7, type.length() - 8));
+    return csql::ColumnType(csql::DataType::STRING, length);
+  } else if (type.length() > 5 && type.substr(0, 5) == "BYTES") {  // bytes[32]
+    int64_t length = std::stoll(type.substr(6, type.length() - 7));
+    return csql::ColumnType(csql::DataType::BYTES, length);
   }
-  return lower(tokens[index]);
+  throw std::runtime_error("Unknown type: " + type);
 }
 
-bool is_number(const std::string &s) {
-  return !s.empty() &&
-         std::find_if(s.begin(), s.end(), [](char c) { return !std::isdigit(c); }) == s.end();
+std::shared_ptr<csql::ColumnDefinition> parseColumnDefinition(
+    csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result, bool &hasComma,
+    bool &hasParen) {
+  csql::Token token = tokenizer.nextToken();
+
+  std::string name;
+  std::unordered_set<csql::ConstraintType> constraints;
+  csql::ColumnType type;
+  std::shared_ptr<csql::Expr> default_value;
+
+  if (token.value == "{") {
+    while (token.value != "}") {
+      token = tokenizer.nextToken();
+      if (token.value == "AUTOINCREMENT") {
+        constraints.insert(csql::ConstraintType::AutoIncrement);
+      } else if (token.value == "UNIQUE") {
+        constraints.insert(csql::ConstraintType::Unique);
+      } else if (token.value == "KEY") {
+        constraints.insert(csql::ConstraintType::Key);
+      } else {
+        result->setErrorDetails("Expected AUTOINCREMENT, UNIQUE or KEY", 0, 0, token);
+        return nullptr;
+      }
+      token = tokenizer.nextToken();
+      if (token.value != "," && token.value != "}") {
+        result->setErrorDetails("Expected , or }", 0, 0, token);
+        return nullptr;
+      }
+    }
+    token = tokenizer.nextToken();  // Consume }
+  }
+
+  if (token.type != csql::TokenType::NAME) {
+    result->setErrorDetails("Expected column name", 0, 0, token);
+    return nullptr;
+  }
+  name = token.value;
+
+  token = tokenizer.nextToken();
+  if (token.value != ":") {
+    result->setErrorDetails("Expected :", 0, 0, token);
+    return nullptr;
+  }
+
+  token = tokenizer.nextToken();
+  if (token.type != csql::TokenType::TYPE) {
+    result->setErrorDetails("Expected column type", 0, 0, token);
+    return nullptr;
+  }
+  type = columnTypeFromString(token.value);
+
+  token = tokenizer.nextToken();
+  if (token.value == "=") {
+    token = tokenizer.nextToken();
+    if (token.type != csql::TokenType::STRING && token.type != csql::TokenType::INTEGER &&
+        token.type != csql::TokenType::HEX && token.value != "TRUE" && token.value != "FALSE") {
+      result->setErrorDetails("Expected string, integer, hex or boolean", 0, 0, token);
+      return nullptr;
+    }
+    default_value = csql::Expr::makeLiteral(token.value);
+    token = tokenizer.nextToken();
+  }
+
+  if (token.value == ",") {
+    hasComma = true;
+  } else if (token.value == ")") {
+    hasParen = true;
+  } else {
+    result->setErrorDetails("Expected , or )", 0, 0, token);
+    return nullptr;
+  }
+
+  return std::make_shared<csql::ColumnDefinition>(
+      name, type, std::make_shared<std::unordered_set<csql::ConstraintType>>(constraints),
+      default_value);
 }
 
-bool is_valid_column_name(const std::string &name) {
-  if (name.empty()) {
+bool parseCreateTable(csql::SQLTokenizer &tokenizer,
+                      std::shared_ptr<csql::SQLParserResult> result) {
+  csql::Token token = tokenizer.nextToken();
+  if (token.type != csql::TokenType::NAME) {
+    result->setErrorDetails("Expected table name", 0, 0, token);
+    return false;
+  }
+  std::string tableName = token.value;
+
+  token = tokenizer.nextToken();
+  if (token.value != "(") {
+    result->setErrorDetails("Expected (", 0, 0, token);
     return false;
   }
 
-  if (!isalpha(name[0]) && name[0] != '_') {
-    return false;
-  }
+  std::shared_ptr<csql::CreateStatement> createStatement =
+      std::make_shared<csql::CreateStatement>(csql::CreateType::kCreateTable);
+  createStatement->tableName = tableName;
+  createStatement->columns =
+      std::make_shared<std::vector<std::shared_ptr<csql::ColumnDefinition>>>();
 
-  for (char c : name) {
-    if (!isalnum(c) && c != '_') {
+  bool hasComma = false;
+  bool hasParen = false;
+
+  while (!hasParen) {
+    std::shared_ptr<csql::ColumnDefinition> column =
+        parseColumnDefinition(tokenizer, result, hasComma, hasParen);
+    if (!column) {
       return false;
     }
+    createStatement->columns->push_back(column);
   }
 
+  result->addStatement(createStatement);
+  result->setIsValid(true);
   return true;
 }
 
-bool is_valid_table_name(const std::string &name) {
-  return is_valid_column_name(name);
-}
-
-bool is_valid_type(const std::string &type) {
-  if (type == "int32" || type == "bool") {
-    return true;
+bool parseCreate(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
+  csql::Token token = tokenizer.nextToken();
+  if (token.value == "TABLE") {
+    return parseCreateTable(tokenizer, result);
+  } else if (token.value == "ORDERED INDEX") {
+    result->setErrorDetails("Ordered indexes are not supported", 0, 0, token);
+    return false;
+  } else if (token.value == "UNORDERED INDEX") {
+    result->setErrorDetails("Unordered indexes are not supported", 0, 0, token);
+    return false;
   }
-  // string[10]
-  if (type.size() > 6 && type.substr(0, 6) == "string") {
-    std::string length = type.substr(6);
-    if (length.size() < 3 || length[0] != '[' || length.back() != ']') {
-      return false;
-    }
-    length = length.substr(1, length.size() - 2);
-    if (!is_number(length) || std::stoll(length) <= 0) {
-      return false;
-    }
-    return true;
-  }
-
-  // bytes[10]
-  if (type.size() > 5 && type.substr(0, 5) == "bytes") {
-    std::string length = type.substr(5);
-    if (length.size() < 3 || length[0] != '[' || length.back() != ']') {
-      return false;
-    }
-    length = length.substr(1, length.size() - 2);
-    if (!is_number(length) || std::stoll(length) <= 0) {
-      return false;
-    }
-    return true;
-  }
-
+  result->setErrorDetails("Expected TABLE, ORDERED INDEX or UNORDERED INDEX", 0, 0, token);
   return false;
 }
 
-bool is_valid_constraint(const std::string &constraint) {
-  if (constraint == "key" || constraint == "unique" || constraint == "autoincrement") {
-    return true;
+std::shared_ptr<csql::ColumnValueDefinition> parseColumnValueDefinition(
+    csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result, bool &hasComma,
+    bool &hasParen) {
+  csql::Token token = tokenizer.nextToken();
+  if (token.value == ")") {
+    hasParen = true;
+    return nullptr;
   }
-  return false;
+
+  if (token.type == csql::TokenType::NAME) {
+    std::string name = token.value;
+    token = tokenizer.nextToken();
+    if (token.value != "=") {
+      result->setErrorDetails("Expected =", 0, 0, token);
+      return nullptr;
+    }
+    token = tokenizer.nextToken();
+    if (token.type != csql::TokenType::STRING && token.type != csql::TokenType::INTEGER &&
+        token.type != csql::TokenType::HEX && token.value != "TRUE" && token.value != "FALSE") {
+      result->setErrorDetails("Expected string, integer, hex or boolean", 0, 0, token);
+      return nullptr;
+    }
+    std::string value = token.value;
+
+    token = tokenizer.nextToken();
+    if (token.value == ",") {
+      hasComma = true;
+    } else if (token.value == ")") {
+      hasParen = true;
+    } else {
+      result->setErrorDetails("Expected , or )", 0, 0, token);
+      return nullptr;
+    }
+    return std::make_shared<csql::ColumnValueDefinition>(name, csql::Expr::makeLiteral(value));
+  } else if (token.type != csql::TokenType::STRING && token.type != csql::TokenType::INTEGER &&
+             token.type != csql::TokenType::HEX && token.value != "TRUE" &&
+             token.value != "FALSE") {
+    result->setErrorDetails("Expected string, integer, hex or boolean", 0, 0, token);
+    return nullptr;
+  } else {
+    std::string value = token.value;
+    token = tokenizer.nextToken();
+    if (token.value == ",") {
+      hasComma = true;
+    } else if (token.value == ")") {
+      hasParen = true;
+    } else {
+      result->setErrorDetails("Expected , or )", 0, 0, token);
+      return nullptr;
+    }
+    return std::make_shared<csql::ColumnValueDefinition>(csql::Expr::makeLiteral(value));
+  }
+}
+
+bool parseInsert(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
+  csql::Token token = tokenizer.nextToken();
+  if (token.value != "(") {
+    result->setErrorDetails("Expected (", 0, 0, token);
+    return false;
+  }
+
+  bool hasComma = false;
+  bool hasParen = false;
+
+  std::string tableName;
+
+  std::shared_ptr<std::vector<std::shared_ptr<csql::ColumnValueDefinition>>> columnValues =
+      std::make_shared<std::vector<std::shared_ptr<csql::ColumnValueDefinition>>>();
+
+  while (!hasParen) {
+    std::shared_ptr<csql::ColumnValueDefinition> columnValue =
+        parseColumnValueDefinition(tokenizer, result, hasComma, hasParen);
+    if (columnValue) {
+      columnValues->push_back(columnValue);
+    } else if (!hasParen) {
+      return false;
+    }
+  }
+
+  token = tokenizer.nextToken();
+  if (token.value != "TO") {
+    result->setErrorDetails("Expected TO", 0, 0, token);
+    return false;
+  }
+
+  token = tokenizer.nextToken();
+  if (token.type != csql::TokenType::NAME) {
+    result->setErrorDetails("Expected table name", 0, 0, token);
+    return false;
+  }
+  tableName = token.value;
+
+  csql::InsertType insertType = csql::InsertType::kUnknown;
+  for (const auto &columnValue : *columnValues) {
+    if (insertType == csql::InsertType::kUnknown) {
+      insertType = columnValue->isNamed ? csql::InsertType::kInsertKeysValues
+                                        : csql::InsertType::kInsertValues;
+    } else if ((insertType == csql::InsertType::kInsertKeysValues && !columnValue->isNamed) ||
+               (insertType == csql::InsertType::kInsertValues && columnValue->isNamed)) {
+      result->setErrorDetails("Cannot mix named and unnamed values", 0, 0, token);
+      return false;
+    }
+  }
+
+  std::shared_ptr<csql::InsertStatement> insertStatement =
+      std::make_shared<csql::InsertStatement>(insertType, tableName);
+  insertStatement->columnValues = columnValues;
+
+  result->addStatement(insertStatement);
+  result->setIsValid(true);
+  return true;
 }
 
 }  // namespace
 
 namespace csql {
 
-SQLParser::SQLParser() {}
-
-std::shared_ptr<std::vector<std::string>> SQLParser::tokenize(const std::string &sql) {
-  // SELECT * FROM table
-  // ["SELECT", "*", "FROM", "table"]
-  // SELECT () FROM table WHERE -|id| % 2 = -1
-  // ["SELECT", "*", "FROM", "table", "WHERE", "-", "|", "id" "|", "%",  "2",
-  // "=", "-1"]
-
-  std::string word;
-  std::shared_ptr<std::vector<std::string>> tokens = std::make_shared<std::vector<std::string>>();
-
-  for (int i = 0; i < sql.size(); i++) {
-    char c = sql[i];
-    if (c == ' ' || c == '\n' || c == '\t') {
-      if (!word.empty()) {
-        tokens->push_back(word);
-        word.clear();
-      }
-    } else if (SPECIAL_CHARS.find(c) != std::string::npos) {
-      if (!word.empty()) {
-        tokens->push_back(word);
-        word.clear();
-      }
-      tokens->push_back(std::string(1, c));
-    } else {
-      word += c;
-    }
-  }
-
-  if (!word.empty()) {
-    tokens->push_back(word);
-  }
-
-  return tokens;
-}
-
-bool SQLParser::parseCreate(const std::vector<std::string> &tokens,
-                            std::shared_ptr<SQLParserResult> result) {
-  if (tokens.size() < 3) {
-    result->setIsValid(false);
-    result->setErrorDetails("Invalid CREATE statement, expected more tokens.", 0, 0);
-    return false;
-  }
-
-  if (get_lower(tokens, 1) == "table") {
-    return parseCreateTable(tokens, result);
-  } else if ((get_lower(tokens, 1) == "ordered" || get_lower(tokens, 1) == "unordered") &&
-             get_lower(tokens, 2) == "index") {
-    return false;
-    // return parseCreateIndex(tokens, result);
-  } else {
-    result->setIsValid(false);
-    result->setErrorDetails("Unknown CREATE statement: " + get_lower(tokens, 1), 0, 0);
-    return false;
-  }
-
-  return false;
-}
-
-bool SQLParser::parseCreateTable(const std::vector<std::string> &tokens,
-                                 std::shared_ptr<SQLParserResult> result) {
-  // CREATE TABLE table_name ([{constraints}] column1: type [= default_value],
-  // ...)
-  std::shared_ptr<CreateStatement> create_statement =
-      std::make_shared<CreateStatement>(CreateType::kCreateTable);
-
-  if (tokens.size() < 4) {
-    result->setIsValid(false);
-    result->setErrorDetails("Invalid CREATE TABLE statement, expected more tokens.", 0, 0);
-    return false;
-  }
-
-  std::string table_name = tokens[2];
-  if (!is_valid_table_name(table_name)) {
-    result->setIsValid(false);
-    result->setErrorDetails("Invalid table name: " + table_name, 0, 0);
-    return false;
-  }
-
-  create_statement->tableName = table_name;
-
-  size_t i = 3;
-  if (tokens[i] != "(") {
-    result->setIsValid(false);
-    result->setErrorDetails("Expected '('.", 0, 0);
-    return false;
-  }
-
-  i++;
-
-  std::shared_ptr<std::vector<std::shared_ptr<ColumnDefinition>>> columns =
-      std::make_shared<std::vector<std::shared_ptr<ColumnDefinition>>>();
-
-  while (i < tokens.size()) {
-    std::shared_ptr<std::unordered_set<ConstraintType>> column_constraints =
-        std::make_shared<std::unordered_set<ConstraintType>>();
-    std::string column_name;
-    ColumnType column_type;
-    std::shared_ptr<Expr> default_value = nullptr;
-
-    if (tokens[i] == "{") {
-      i++;
-      while (tokens[i] != "}") {
-        std::string constraint = lower(tokens[i]);
-
-        if (!is_valid_constraint(constraint)) {
-          result->setIsValid(false);
-          result->setErrorDetails("Invalid constraint: " + constraint, 0, i);
-          return false;
-        }
-
-        if (constraint == "key") {
-          column_constraints->insert(ConstraintType::Key);
-        } else if (constraint == "unique") {
-          column_constraints->insert(ConstraintType::Unique);
-        } else if (constraint == "autoincrement") {
-          column_constraints->insert(ConstraintType::AutoIncrement);
-        }
-
-        i++;
-        if (get_lower(tokens, i) != "," && get_lower(tokens, i) != "}") {
-          result->setIsValid(false);
-          result->setErrorDetails("Expected ',' or '}', got " + get_lower(tokens, i), 0, i);
-          return false;
-        }
-        if (get_lower(tokens, i) == ",") {
-          i++;
-        } else {
-          break;
-        }
-      }
-      i++;
-    }
-
-    column_name = tokens[i];
-    if (!is_valid_column_name(column_name)) {
-      result->setIsValid(false);
-      result->setErrorDetails("Invalid column name: " + column_name, 0, i);
-      return false;
-    }
-
-    i++;
-    if (get_lower(tokens, i) != ":") {
-      result->setIsValid(false);
-      result->setErrorDetails("Expected ':', got " + get_lower(tokens, i), 0, i);
-      return false;
-    }
-
-    i++;
-    std::string type = get_lower(tokens, i);
-
-    if (!is_valid_type(type)) {
-      result->setIsValid(false);
-      result->setErrorDetails("Invalid type: " + type, 0, 0);
-      return false;
-    }
-
-    if (type == "int32") {
-      column_type = ColumnType(DataType::INT32);
-    } else if (type == "bool") {
-      column_type = ColumnType(DataType::BOOL);
-    } else if (type.size() > 6 && type.substr(0, 6) == "string") {
-      std::string length = type.substr(6);
-      length = length.substr(1, length.size() - 2);
-      column_type = ColumnType(DataType::STRING, std::stoll(length));
-    } else if (type.size() > 5 && type.substr(0, 5) == "bytes") {
-      std::string length = type.substr(5);
-      length = length.substr(1, length.size() - 2);
-      column_type = ColumnType(DataType::BYTES, std::stoll(length));
-    }
-
-    if (column_constraints->count(ConstraintType::AutoIncrement) > 0 &&
-        column_type.data_type != DataType::INT32) {
-      result->setIsValid(false);
-      result->setErrorDetails("Autoincrement column must be of type int32.", 0, i);
-      return false;
-    }
-
-    i++;
-    if (get_lower(tokens, i) == "=") {
-      if (column_constraints->count(ConstraintType::AutoIncrement) > 0) {
-        result->setIsValid(false);
-        result->setErrorDetails("Autoincrement column cannot have default value.", 0, i);
-        return false;
-      }
-      i++;
-      default_value = Expr::makeLiteral(tokens[i]);
-      if (!default_value) {
-        result->setIsValid(false);
-        result->setErrorDetails("Invalid default value: " + tokens[i], 0, 0);
-        return false;
-      }
-      if (column_type.data_type == DataType::INT32 && default_value->type != kExprLiteralInt &&
-          default_value->type != kExprLiteralNull) {
-        result->setIsValid(false);
-        result->setErrorDetails("Invalid default value for int32 column: " + tokens[i], 0, 0);
-        return false;
-      }
-      if (column_type.data_type == DataType::BOOL && default_value->type != kExprLiteralBool &&
-          default_value->type != kExprLiteralNull) {
-        result->setIsValid(false);
-        result->setErrorDetails("Invalid default value for bool column: " + tokens[i], 0, 0);
-        return false;
-      }
-      if (column_type.data_type == DataType::STRING && default_value->type != kExprLiteralString &&
-          default_value->type != kExprLiteralNull) {
-        result->setIsValid(false);
-        result->setErrorDetails("Invalid default value for string column: " + tokens[i], 0, 0);
-        return false;
-      }
-      if (column_type.data_type == DataType::BYTES && default_value->type != kExprLiteralBytes &&
-          default_value->type != kExprLiteralString && default_value->type != kExprLiteralNull) {
-        result->setIsValid(false);
-        result->setErrorDetails("Invalid default value for bytes column: " + tokens[i], 0, 0);
-        return false;
-      }
-      i++;
-    }
-
-    std::shared_ptr<ColumnDefinition> column_definition = std::make_shared<ColumnDefinition>(
-        column_name, column_type, column_constraints, default_value);
-
-    columns->push_back(column_definition);
-
-    if (get_lower(tokens, i) != "," && get_lower(tokens, i) != ")") {
-      result->setIsValid(false);
-      result->setErrorDetails("Expected ',' or ')', got " + get_lower(tokens, i), 0, i);
-      return false;
-    }
-    if (get_lower(tokens, i) == ",") {
-      i++;
-      continue;
-    }
-    if (get_lower(tokens, i) == ")") {
-      break;
-    }
-  }
-
-  create_statement->setColumnDefs(columns);
-
-  result->addStatement(create_statement);
-  result->setIsValid(true);
-  return true;
-}
-
-bool SQLParser::parseInsert(const std::vector<std::string> &tokens,
-                            std::shared_ptr<SQLParserResult> result) {
-  // INSERT (value1, value2, ...) to table_name
-  // INSERT (key1=value1, key2=value2, ...) to table_name
-
-  size_t i = 1;  // Skip "INSERT"
-  if (tokens[i] != "(") {
-    result->setIsValid(false);
-    result->setErrorDetails("Expected '('.", 0, 0);
-    return false;
-  }
-
-  std::shared_ptr<std::vector<std::shared_ptr<ColumnValueDefinition>>> column_values =
-      std::make_shared<std::vector<std::shared_ptr<ColumnValueDefinition>>>();
-  i++;
-  while (get_lower(tokens, i) != ")") {
-    if (get_lower(tokens, i) == ",") {
-      i++;
-      continue;
-    }
-
-    std::shared_ptr<ColumnValueDefinition> column_value;
-
-    if (get_lower(tokens, i + 1) == "=") {
-      std::string column_name = tokens[i];
-      if (!is_valid_column_name(column_name)) {
-        result->setIsValid(false);
-        result->setErrorDetails("Invalid column name: " + column_name, 0, 0);
-        return false;
-      }
-      if (tokens.size() < i + 3 || tokens[i + 2] == "," || tokens[i + 2] == ")") {
-        result->setIsValid(false);
-        result->setErrorDetails("Expected value after '='.", 0, 0);
-        return false;
-      }
-
-      std::shared_ptr<Expr> value = Expr::makeLiteral(tokens[i + 2]);
-      if (!value) {
-        result->setIsValid(false);
-        result->setErrorDetails("Invalid value: " + tokens[i + 2], 0, 0);
-        return false;
-      }
-
-      column_value = std::make_shared<ColumnValueDefinition>(column_name, value);
-      i += 3;
-    } else {
-      std::shared_ptr<Expr> value = Expr::makeLiteral(tokens[i]);
-      if (!value) {
-        result->setIsValid(false);
-        result->setErrorDetails("Invalid value: " + tokens[i], 0, 0);
-        return false;
-      }
-
-      column_value = std::make_shared<ColumnValueDefinition>(value);
-      i += 1;
-    }
-
-    column_values->push_back(column_value);
-
-    if (get_lower(tokens, i) != "," && get_lower(tokens, i) != ")") {
-      result->setIsValid(false);
-      result->setErrorDetails("Expected ',' or ')', got " + get_lower(tokens, i), 0, 0);
-      return false;
-    }
-    if (get_lower(tokens, i) == ",") {
-      i++;
-      continue;
-    }
-    if (get_lower(tokens, i) == ")") {
-      break;
-    }
-  }
-
-  i++;
-  if (get_lower(tokens, i) != "to") {
-    result->setIsValid(false);
-    result->setErrorDetails("Expected 'to', got " + get_lower(tokens, i), 0, 0);
-    return false;
-  }
-
-  i++;
-  if (i >= tokens.size()) {
-    result->setIsValid(false);
-    result->setErrorDetails("Expected table name.", 0, 0);
-    return false;
-  }
-
-  std::string table_name = tokens[i];
-  if (!is_valid_table_name(table_name)) {
-    result->setIsValid(false);
-    result->setErrorDetails("Invalid table name: " + table_name, 0, 0);
-    return false;
-  }
-
-  InsertType type = InsertType::kUnknown;
-  for (const auto &column_value : *column_values) {
-    if (type == InsertType::kUnknown) {
-      type = column_value->isNamed ? InsertType::kInsertKeysValues : InsertType::kInsertValues;
-    } else {
-      if ((type == InsertType::kInsertKeysValues && !column_value->isNamed) ||
-          (type == InsertType::kInsertValues && column_value->isNamed)) {
-        result->setIsValid(false);
-        result->setErrorDetails("Cannot mix named and unnamed values.", 0, 0);
-        return false;
-      }
-    }
-  }
-
-  std::shared_ptr<InsertStatement> insert_statement =
-      std::make_shared<InsertStatement>(type, table_name);
-  insert_statement->setColumnValues(column_values);
-
-  result->addStatement(insert_statement);
-  result->setIsValid(true);
-  return true;
-}
-
 bool SQLParser::parse(const std::string &sql, std::shared_ptr<SQLParserResult> result) {
-  std::cout << "Parsing SQL: " << sql << std::endl;
+  SQLTokenizer tokenizer(sql);
 
-  std::shared_ptr<std::vector<std::string>> tokens = tokenize(sql);
-  result->setTokens(tokens);
-  if (tokens->empty()) {
-    result->setIsValid(false);
-    result->setErrorDetails("No tokens found.", 0, 0);
+  Token token = tokenizer.nextToken();
+
+  if (token.type != TokenType::KEYWORD) {
+    result->setErrorDetails("Expected keyword at the beginning of the query", 0, 0, token);
     return false;
   }
 
-  std::string first_token = get_lower(*tokens, 0);
-
-  if (first_token == "create") {
-    return parseCreate(*tokens, result);
-  } else if (first_token == "select") {
-    // return parseSelect(tokens, result);
-  } else if (first_token == "insert") {
-    return parseInsert(*tokens, result);
-  } else if (first_token == "delete") {
-    // return parseDelete(tokens, result);
-  } else if (first_token == "drop") {
-    // return parseDrop(tokens, result);
-  } else {
-    result->setIsValid(false);
-    result->setErrorDetails("Unknown statement type: " + first_token, 0, 0);
-    return false;
+  if (token.value == "CREATE") {
+    return parseCreate(tokenizer, result);
+  } else if (token.value == "INSERT") {
+    return parseInsert(tokenizer, result);
   }
 
+  result->setErrorDetails("Unknown keyword", 0, 0, token);
   return false;
 }
 

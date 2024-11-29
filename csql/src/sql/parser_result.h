@@ -2,6 +2,7 @@
 
 #include "sql/expr.h"
 #include "sql/statements/statement.h"
+#include "sql/tokenizer.h"
 
 namespace csql {
 // Represents the result of the SQLParser.
@@ -14,9 +15,8 @@ class SQLParserResult {
   void setIsValid(bool isValid);
   bool isValid() const;
   size_t size() const;
-  void setErrorDetails(std::string errorMsg, int errorLine, int errorColumn);
-  void setTokens(std::shared_ptr<std::vector<std::string>> tokens);
-  const std::string& errorMsg() const;
+  void setErrorDetails(std::string errorMsg, int errorLine, int errorColumn, Token token);
+  const std::string errorMsg() const;
   int errorLine() const;
   int errorColumn() const;
   void addStatement(std::shared_ptr<SQLStatement> stmt);
@@ -30,7 +30,9 @@ class SQLParserResult {
   std::string errorMsg_;
   int errorLine_;
   int errorColumn_;
-  std::shared_ptr<std::vector<std::string>> tokens_;
+  Token token_;
 };
+
+std::ostream& operator<<(std::ostream& stream, const SQLParserResult& result);
 
 }  // namespace csql

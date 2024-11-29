@@ -144,13 +144,6 @@ std::shared_ptr<Expr> Expr::makeSelect(std::shared_ptr<SelectStatement> select) 
   return e;
 }
 
-std::shared_ptr<Expr> Expr::makeCast(std::shared_ptr<Expr> expr, ColumnType columnType) {
-  std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprCast);
-  e->columnType = columnType;
-  e->expr = expr;
-  return e;
-}
-
 bool Expr::isType(ExprType exprType) const {
   return exprType == type;
 }
@@ -179,14 +172,105 @@ std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
     case kExprLiteralBool:
       stream << (expr.ival == 1 ? "true" : "false");
       break;
-    case kExprLiteralBytes:
+    case kExprLiteralBytes: {
       stream << "0x";
-      for (size_t i = 0; i < expr.name.size(); i++) {
-        stream << std::hex << (int)expr.name[i];
+      bool has_non_zero = false;
+      for (size_t j = 0; j < expr.name.size(); j++) {
+        uint8_t byte = expr.name[expr.name.size() - j - 1];
+        if (byte != 0) {
+          has_non_zero = true;
+        }
+        if (has_non_zero) {
+          stream << std::hex << (int)byte;
+        }
       }
-      break;
+    } break;
     case kExprLiteralNull:
       stream << "NULL";
+      break;
+    case kExprColumnRef:
+      if (expr.table != "") {
+        stream << expr.table << ".";
+      }
+      stream << expr.name;
+      break;
+    case kExprStar:
+      if (expr.table != "") {
+        stream << expr.table << ".";
+      }
+      stream << "*";
+      break;
+    case kExprOperator:
+      stream << "(";
+      if (expr.expr) {
+        stream << *expr.expr;
+      }
+      switch (expr.opType) {
+        case kOpPlus:
+          stream << " + ";
+          break;
+        case kOpMinus:
+          stream << " - ";
+          break;
+        case kOpAsterisk:
+          stream << " * ";
+          break;
+        case kOpSlash:
+          stream << " / ";
+          break;
+        case kOpPercentage:
+          stream << " % ";
+          break;
+        case kOpEquals:
+          stream << " = ";
+          break;
+        case kOpNotEquals:
+          stream << " != ";
+          break;
+        case kOpLess:
+          stream << " < ";
+          break;
+        case kOpLessEq:
+          stream << " <= ";
+          break;
+        case kOpGreater:
+          stream << " > ";
+          break;
+        case kOpGreaterEq:
+          stream << " >= ";
+          break;
+        case kOpAnd:
+          stream << " AND ";
+          break;
+        case kOpOr:
+          stream << " OR ";
+          break;
+        case kOpIn:
+          stream << " IN ";
+          break;
+        case kOpNot:
+          stream << " NOT ";
+          break;
+        case kOpUnaryMinus:
+          stream << " -";
+          break;
+        case kOpIsNull:
+          stream << " IS NULL";
+          break;
+        case kOpExists:
+          stream << " EXISTS";
+          break;
+        default:
+          stream << " UNKNOWN";
+          break;
+      }
+      if (expr.expr2) {
+        stream << *expr.expr2;
+      }
+      stream << ")";
+      break;
+    case kExprSelect:
+      stream << *expr.select;
       break;
   }
   return stream;

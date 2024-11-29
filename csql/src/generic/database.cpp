@@ -12,6 +12,7 @@ namespace storage {
 std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
   std::shared_ptr<SQLParserResult> result = std::make_shared<SQLParserResult>();
   SQLParser::parse(sql, result);
+  std::cout << "Parsing result:\n" << *result << std::endl;
 
   if (result->isValid()) {
     for (auto stmt : result->getStatements()) {

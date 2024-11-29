@@ -1,5 +1,7 @@
 #include "statements.h"
 
+#include <string>
+
 #include "table.h"
 
 namespace csql {
@@ -31,24 +33,24 @@ bool operator!=(const ColumnType& lhs, const ColumnType& rhs) {
   return !(lhs == rhs);
 }
 
-std::ostream& operator<<(std::ostream& stream, const ColumnType& column_type) {
+std::string to_string(const ColumnType& column_type) {
   switch (column_type.data_type) {
     case DataType::UNKNOWN:
-      stream << "UNKNOWN";
-      break;
+      return "UNKNOWN";
     case DataType::INT32:
-      stream << "int32";
-      break;
+      return "int32";
     case DataType::STRING:
-      stream << "string[" << column_type.length << "]";
-      break;
+      return "string[" + std::to_string(column_type.length) + "]";
     case DataType::BOOL:
-      stream << "bool";
-      break;
+      return "bool";
     case DataType::BYTES:
-      stream << "bytes[" << column_type.length << "]";
-      break;
+      return "bytes[" + std::to_string(column_type.length) + "]";
   }
+  return "UNKNOWN";
+}
+
+std::ostream& operator<<(std::ostream& stream, const ColumnType& column_type) {
+  stream << to_string(column_type);
   return stream;
 }
 

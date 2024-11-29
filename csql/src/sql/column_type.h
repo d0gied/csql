@@ -22,5 +22,6 @@ struct ColumnType {
 bool operator==(const ColumnType& lhs, const ColumnType& rhs);
 bool operator!=(const ColumnType& lhs, const ColumnType& rhs);
 std::ostream& operator<<(std::ostream&, const ColumnType&);
+std::string to_string(const ColumnType&);
 
 }  // namespace csql

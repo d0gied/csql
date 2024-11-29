@@ -59,6 +59,52 @@ void Table::insert(std::shared_ptr<InsertStatement> insertStatement) {
     }
   }
 
+  bool check_unique = false;
+  for (const auto& column : columns_) {
+    if (column->isUnique() || column->is_key_) {
+      check_unique = true;
+      break;
+    }
+  }
+
+  if (check_unique && size() > 0) {
+    auto it = getIterator();
+    while (it->hasNext()) {
+      auto row = it->next();
+      bool is_unique = true;
+      for (size_t i = 0; i < columns_.size(); i++) {
+        if (values[i]->isNull()) {
+          continue;
+        }
+        if (columns_[i]->isUnique() || columns_[i]->is_key_ && !row->isNull(i)) {
+          if (columns_[i]->type().data_type == DataType::STRING) {
+            if (row->get<std::string>(i) == values[i]->getString()) {
+              is_unique = false;
+              break;
+            }
+          } else if (columns_[i]->type().data_type == DataType::INT32) {
+            if (row->get<int32_t>(i) == values[i]->getInt()) {
+              is_unique = false;
+              break;
+            }
+          } else if (columns_[i]->type().data_type == DataType::BOOL) {
+            if (row->get<bool>(i) == values[i]->getBool()) {
+              is_unique = false;
+              break;
+            }
+          } else if (columns_[i]->type().data_type == DataType::BYTES) {
+            if (row->get<std::vector<uint8_t>>(i) == values[i]->getBytes()) {
+              is_unique = false;
+              break;
+            }
+          }
+        }
+        if (!is_unique) {
+          throw std::runtime_error("Unique constraint violation");
+        }
+      }
+    }
+  }
   storage_->insert(*Cell::create(values));
 }
 
@@ -101,7 +147,9 @@ void Table::exportToCSV(const std::string& filename) {
     auto row = it->next();
     for (size_t i = 0; i < columns_.size(); i++) {
       auto column = columns_[i];
-      if (column->type().data_type == DataType::STRING) {
+      if (row->isNull(i)) {
+        file << "null";
+      } else if (column->type().data_type == DataType::STRING) {
         file << row->get<std::string>(i);
       } else if (column->type().data_type == DataType::INT32) {
         file << row->get<int32_t>(i);

@@ -13,6 +13,7 @@ struct Value {
   Value() = default;
   Value(ColumnType type, void* value);
 
+  bool isNull() const;
   int32_t getInt() const;
   bool getBool() const;
   std::string getString() const;

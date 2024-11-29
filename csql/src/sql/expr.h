@@ -3,7 +3,6 @@
 #include <stdlib.h>
 
 #include <memory>
-#include <vector>
 
 #include "column_type.h"
 // #include "sql/statements/select.h"
@@ -24,8 +23,6 @@ enum ExprType {
   kExprColumnRef,
   kExprOperator,
   kExprSelect,
-  kExprExtract,
-  kExprCast
 };
 
 // Operator types. These are important for expressions of type kExprOperator.
@@ -38,7 +35,6 @@ enum OperatorType {
   kOpAsterisk,
   kOpSlash,
   kOpPercentage,
-  kOpCaret,
 
   kOpEquals,
   kOpNotEquals,
@@ -52,7 +48,6 @@ enum OperatorType {
   kOpAnd,
   kOpOr,
   kOpIn,
-  kOpConcat,
 
   // Unary operators.
   kOpNot,

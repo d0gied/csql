@@ -8,7 +8,7 @@ int main() {
 
   db.execute(
       "create table users ({key, autoincrement} id :int32, {unique} login: string[32] = "
-      "\"hello\", password_hash: bytes[8] = 0x0011223344556677, is_admin: bool = false)");
+      "\"hello abc\", password_hash: bytes[8] = 0x0011223344556677, is_admin: bool)");
 
   db.execute(
       "insert (login=\"admin\", password_hash=0x0011223344556677, is_admin=true) to "

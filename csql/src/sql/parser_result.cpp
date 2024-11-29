@@ -3,6 +3,8 @@
 
 #include <algorithm>
 
+#include "sql/parser.h"
+
 namespace csql {
 
 SQLParserResult::SQLParserResult() : isValid_(false), errorMsg_("") {}
@@ -28,8 +30,9 @@ bool SQLParserResult::isValid() const {
   return isValid_;
 }
 
-const std::string& SQLParserResult::errorMsg() const {
-  return errorMsg_;
+const std::string SQLParserResult::errorMsg() const {
+  return errorMsg_ + "\n" + "Got: " + token_.value +
+         "\nToken type: " + tokenTypeToString(token_.type);
 }
 
 int SQLParserResult::errorLine() const {
@@ -44,14 +47,13 @@ void SQLParserResult::setIsValid(bool isValid) {
   isValid_ = isValid;
 }
 
-void SQLParserResult::setErrorDetails(std::string errorMsg, int errorLine, int errorColumn) {
+void SQLParserResult::setErrorDetails(std::string errorMsg, int errorLine, int errorColumn,
+                                      Token token) {
+  isValid_ = false;
   errorMsg_ = errorMsg;
   errorLine_ = errorLine;
   errorColumn_ = errorColumn;
-}
-
-void SQLParserResult::setTokens(std::shared_ptr<std::vector<std::string>> tokens) {
-  tokens_ = tokens;
+  token_ = token;
 }
 
 const std::vector<std::shared_ptr<SQLStatement>>& SQLParserResult::getStatements() const {
@@ -65,6 +67,23 @@ void SQLParserResult::reset() {
   errorMsg_ = nullptr;
   errorLine_ = -1;
   errorColumn_ = -1;
+}
+
+std::ostream& operator<<(std::ostream& stream, const SQLParserResult& result) {
+  if (result.isValid()) {
+    for (const auto& stmt : result.getStatements()) {
+      if (stmt->is(kStmtCreate)) {
+        stream << *std::dynamic_pointer_cast<CreateStatement>(stmt) << std::endl;
+      } else if (stmt->is(kStmtInsert)) {
+        stream << *std::dynamic_pointer_cast<InsertStatement>(stmt) << std::endl;
+      } else {
+        stream << "Unknown statement" << std::endl;
+      }
+    }
+  } else {
+    stream << "Invalid: " << result.errorMsg();
+  }
+  return stream;
 }
 
 }  // namespace csql

@@ -7,6 +7,10 @@ namespace storage {
 
 Value::Value(ColumnType type, void *value) : type(type), value(value) {}
 
+bool Value::isNull() const {
+  return value == nullptr;
+}
+
 int32_t Value::getInt() const {
   return *static_cast<int32_t *>(value);
 }
@@ -20,7 +24,7 @@ bool Value::getBool() const {
 
 std::string Value::getString() const {
   if (type.data_type != DataType::STRING) {
-    throw std::runtime_error("Invalid type, expected STRING");
+    throw std::runtime_error("Invalid type, expected STRING, got " + to_string(type.data_type));
   }
   return *static_cast<std::string *>(value);
 }
