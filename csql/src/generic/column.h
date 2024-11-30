@@ -5,7 +5,6 @@
 
 #include "../memory/cell.h"
 #include "../sql/statements/create.h"
-#include "table.h"
 
 namespace csql {
 namespace storage {

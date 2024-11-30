@@ -28,7 +28,7 @@ class DummyIterator : public Iterator {
  public:
   DummyIterator(std::shared_ptr<DummyStorage> storage);
 
-  bool hasNext() override;
+  bool hasValue() override;
   void next() override;
   Cell* get() override;
 

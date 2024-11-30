@@ -20,10 +20,13 @@ int main() {
       "insert (login=\"user2\", password_hash=0x2233445566778899) to "
       "users");
 
-  db.execute(
-      "SELECT * FROM users WHERE (is_admin = true) OR (NOT users.login = \"admin\") AND (id = 1) "
-      "AND "
-      "(|users.login| >= 5 + 3) AND user.login IS NOT NULL");
+  auto iterator = db.execute("SELECT * FROM users WHERE password_hash=0x0011223344556677");
+
+  while (iterator->hasValue()) {
+    auto row = *(*iterator);
+    ++(*iterator);
+    std::cout << "Login: " << row->get<std::string>("login") << std::endl;
+  }
 
   db.exportTableToCSV("users", "users.csv");
 

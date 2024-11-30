@@ -23,19 +23,13 @@ class Row {
   T get(size_t index) const;
 
   template <typename T>
-  T get(std::string columnName) {
-    auto table = table_.lock();
-    for (size_t i = 0; i < table->columns_.size(); i++) {
-      if (table->columns_[i]->getName() == columnName) {
-        return get<T>(i);
-      }
-    }
-    throw std::runtime_error("Column not found: " + columnName);
-    return T();
-  }
+  T get(std::string columnName) const;
 
   bool isNull(size_t index) const;
   bool isNull(std::string columnName) const;
+
+  std::shared_ptr<Expr> evaluate(std::shared_ptr<Expr> expr);
+  std::shared_ptr<Expr> getColumnValue(std::string columnName);
 
   friend std::ostream& operator<<(std::ostream& stream, const Row& row);
 

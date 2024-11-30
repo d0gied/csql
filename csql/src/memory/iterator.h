@@ -12,7 +12,7 @@ class Iterator {
  public:
   virtual ~Iterator() = default;
 
-  virtual bool hasNext() = 0;
+  virtual bool hasValue() = 0;
   virtual void next() = 0;
   virtual Cell* get() = 0;
 };

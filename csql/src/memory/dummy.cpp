@@ -19,7 +19,7 @@ void DummyStorage::clear() {
 DummyIterator::DummyIterator(std::shared_ptr<DummyStorage> storage)
     : storage_(storage), index_(0) {}
 
-bool DummyIterator::hasNext() {
+bool DummyIterator::hasValue() {
   return index_ < storage_->cells_.size();
 }
 
@@ -28,7 +28,7 @@ size_t DummyStorage::size() {
 }
 
 void DummyIterator::next() {
-  if (!hasNext()) return;
+  if (!hasValue()) return;
   index_++;
 }
 

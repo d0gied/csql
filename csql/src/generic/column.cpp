@@ -74,8 +74,9 @@ int32_t Column::maxValue() const {
   }
   auto iter = table->getIterator();
   int32_t max = 0;
-  while (iter->hasNext()) {
-    auto row = iter->next();
+  while (iter->hasValue()) {
+    auto row = *(*iter);
+    ++(*iter);
     if (row->isNull(name_)) continue;
     int32_t value = row->get<int32_t>(name_);
     if (value > max) max = value;

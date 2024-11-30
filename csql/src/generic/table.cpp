@@ -21,6 +21,7 @@ std::shared_ptr<Table> Table::create(std::shared_ptr<CreateStatement> createStat
   for (const auto& column : *createStatement->columns) {
     table->addColumn(Column::create(column));
   }
+  table->name_ = createStatement->tableName;
   return table;
 }
 
@@ -31,6 +32,14 @@ void Table::addColumn(std::shared_ptr<Column> column) {
 
 size_t Table::size() const {
   return storage_->size();
+}
+
+const std::string& Table::getName() const {
+  return name_;
+}
+
+const std::vector<std::shared_ptr<Column>>& Table::getColumns() const {
+  return columns_;
 }
 
 void Table::insert(std::shared_ptr<InsertStatement> insertStatement) {
@@ -69,8 +78,9 @@ void Table::insert(std::shared_ptr<InsertStatement> insertStatement) {
 
   if (check_unique && size() > 0) {
     auto it = getIterator();
-    while (it->hasNext()) {
-      auto row = it->next();
+    while (it->hasValue()) {
+      auto row = *(*it);
+      ++(*it);
       bool is_unique = true;
       for (size_t i = 0; i < columns_.size(); i++) {
         if (values[i]->isNull()) {
@@ -108,22 +118,64 @@ void Table::insert(std::shared_ptr<InsertStatement> insertStatement) {
   storage_->insert(*Cell::create(values));
 }
 
-std::shared_ptr<TableIterator> Table::getIterator() {
-  return std::make_shared<TableIterator>(shared_from_this(), storage_->getIterator());
+std::shared_ptr<AllTableIterator> Table::getIterator() {
+  return std::make_shared<AllTableIterator>(shared_from_this(), storage_->getIterator());
 }
 
-TableIterator::TableIterator(std::shared_ptr<Table> table, std::shared_ptr<Iterator> iterator)
-    : table_(table), iterator_(iterator) {}
+AllTableIterator::AllTableIterator(std::shared_ptr<Table> table, std::shared_ptr<Iterator> iterator)
+    : iterator_(iterator), table_(table) {}
 
-bool TableIterator::hasNext() {
-  return iterator_->hasNext();
+bool AllTableIterator::hasValue() const {
+  return iterator_->hasValue();
 }
 
-std::shared_ptr<Row> TableIterator::next() {
-  if (!hasNext()) return nullptr;
-  auto result = std::make_shared<Row>(table_, iterator_->get());
+std::shared_ptr<Row> AllTableIterator::operator*() const {
+  return std::make_shared<Row>(table_, iterator_->get());
+}
+
+AllTableIterator& AllTableIterator::operator++() {
   iterator_->next();
-  return result;
+  return *this;
+}
+
+WhereClauseIterator::WhereClauseIterator(std::shared_ptr<TableIterator> tableIterator,
+                                         std::shared_ptr<Expr> whereClause)
+    : tableIterator_(tableIterator), whereClause_(whereClause) {
+  while (tableIterator_->hasValue()) {  // skip rows that don't match the where clause
+    auto row = *(*tableIterator_);
+    auto expr = row->evaluate(whereClause_);
+    if (expr->type != kExprLiteralBool) {
+      throw std::runtime_error("Expected boolean expression");
+    }
+    if (expr->ival) {
+      break;
+    }
+    ++(*tableIterator_);
+  }
+}
+
+bool WhereClauseIterator::hasValue() const {
+  return tableIterator_->hasValue();
+}
+
+std::shared_ptr<Row> WhereClauseIterator::operator*() const {
+  return tableIterator_->operator*();
+}
+
+WhereClauseIterator& WhereClauseIterator::operator++() {
+  ++(*tableIterator_);
+  while (tableIterator_->hasValue()) {
+    auto row = *(*tableIterator_);
+    auto expr = row->evaluate(whereClause_);
+    if (expr->type != kExprLiteralBool) {
+      throw std::runtime_error("Expected boolean expression");
+    }
+    if (expr->ival) {
+      break;
+    }
+    ++(*tableIterator_);
+  }
+  return *this;
 }
 
 void Table::exportToCSV(const std::string& filename) {
@@ -148,8 +200,9 @@ void Table::exportToCSV(const std::string& filename) {
 
   auto it = getIterator();
 
-  while (it->hasNext()) {
-    auto row = it->next();
+  while (it->hasValue()) {
+    auto row = *(*it);
+    ++(*it);  // increment iterator
     for (size_t i = 0; i < columns_.size(); i++) {
       auto column = columns_[i];
       if (row->isNull(i)) {
@@ -184,10 +237,6 @@ void Table::exportToCSV(const std::string& filename) {
   }
 
   file.close();
-}
-
-std::shared_ptr<Row> TableIterator::operator++() {
-  return next();
 }
 
 }  // namespace storage

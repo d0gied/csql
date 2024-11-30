@@ -184,6 +184,21 @@ std::shared_ptr<Expr> Expr::makeLiteral(bool val) {
   return e;
 }
 
+std::shared_ptr<Expr> Expr::makeLiteral(std::vector<uint8_t> val) {
+  std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprLiteralBytes);
+  e->name = "";
+  for (int8_t byte : val) {
+    e->name += byte;
+  }
+  return e;
+}
+
+std::shared_ptr<Expr> Expr::makeStringLiteral(const std::string& val) {
+  std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprLiteralString);
+  e->name = val;
+  return e;
+}
+
 std::shared_ptr<Expr> Expr::makeNullLiteral() {
   std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprLiteralNull);
   return e;
@@ -191,7 +206,14 @@ std::shared_ptr<Expr> Expr::makeNullLiteral() {
 
 std::shared_ptr<Expr> Expr::makeColumnRef(const std::string& name) {
   std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprColumnRef);
-  e->name = name;
+  size_t dot_pos = name.find('.');
+  if (dot_pos != std::string::npos) {
+    e->table = name.substr(0, dot_pos);
+    e->name = name.substr(dot_pos + 1);
+  } else {
+    e->table = "";
+    e->name = name;
+  }
   return e;
 }
 
@@ -275,12 +297,54 @@ std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
       }
       stream << "*";
       break;
-    case kExprOperator:
-      stream << "(" << "OPERATOR" << ")";  // TODO: Implement this.
-      break;
-    default:
-      stream << "UNKNOWN";
-      break;
+    case kExprOperator: {
+      if (expr.opType == kOpUnaryMinus) {
+        stream << "-" << *expr.expr;
+      } else if (expr.opType == kOpPlus) {
+        stream << *expr.expr << " + " << *expr.expr2;
+      } else if (expr.opType == kOpMinus) {
+        stream << *expr.expr << " - " << *expr.expr2;
+      } else if (expr.opType == kOpAsterisk) {
+        stream << *expr.expr << " * " << *expr.expr2;
+      } else if (expr.opType == kOpSlash) {
+        stream << *expr.expr << " / " << *expr.expr2;
+      } else if (expr.opType == kOpPercentage) {
+        stream << *expr.expr << " % " << *expr.expr2;
+      } else if (expr.opType == kOpEquals) {
+        stream << *expr.expr << " = " << *expr.expr2;
+      } else if (expr.opType == kOpNotEquals) {
+        stream << *expr.expr << " != " << *expr.expr2;
+      } else if (expr.opType == kOpLess) {
+        stream << *expr.expr << " < " << *expr.expr2;
+      } else if (expr.opType == kOpLessEq) {
+        stream << *expr.expr << " <= " << *expr.expr2;
+      } else if (expr.opType == kOpGreater) {
+        stream << *expr.expr << " > " << *expr.expr2;
+      } else if (expr.opType == kOpGreaterEq) {
+        stream << *expr.expr << " >= " << *expr.expr2;
+      } else if (expr.opType == kOpAnd) {
+        stream << *expr.expr << " AND " << *expr.expr2;
+      } else if (expr.opType == kOpOr) {
+        stream << *expr.expr << " OR " << *expr.expr2;
+      } else if (expr.opType == kOpIn) {
+        stream << *expr.expr << " IN " << *expr.expr2;
+      } else if (expr.opType == kOpNot) {
+        stream << "NOT " << *expr.expr;
+      } else if (expr.opType == kOpIsNull) {
+        stream << *expr.expr << " IS NULL";
+      } else if (expr.opType == kOpExists) {
+        stream << "EXISTS " << *expr.expr;
+      } else if (expr.opType == kOpParenthesis) {
+        stream << "(" << *expr.expr << ")";
+      } else if (expr.opType == kOpBitNot) {
+        stream << "~" << *expr.expr;
+      } else if (expr.opType == kOpLength) {
+        stream << "|" << *expr.expr << "|";
+      } else {
+        stream << "UNKNOWN_OPERATOR";
+      }
+
+    } break;
   }
   return stream;
 }
@@ -309,7 +373,11 @@ std::string Expr::toMermaid(std::string node_name, bool subexpr) const {
       result = node_name + "[NULL]";
       break;
     case kExprColumnRef:
-      result = node_name + "(" + name + ")";
+      if (table != "") {
+        result = node_name + "(" + table + "." + name + ")";
+      } else {
+        result = node_name + "(" + name + ")";
+      }
       break;
     case kExprStar:
       result = node_name + "(*)";

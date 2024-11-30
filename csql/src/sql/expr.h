@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include <memory>
+#include <vector>
 
 #include "column_type.h"
 // #include "sql/statements/select.h"
@@ -103,7 +104,9 @@ struct Expr {
                                             std::shared_ptr<Expr> expr2);
   static std::shared_ptr<Expr> makeLiteral(int32_t val);
   static std::shared_ptr<Expr> makeLiteral(const std::string& val);
+  static std::shared_ptr<Expr> makeStringLiteral(const std::string& val);
   static std::shared_ptr<Expr> makeLiteral(bool val);
+  static std::shared_ptr<Expr> makeLiteral(std::vector<uint8_t> val);
   static std::shared_ptr<Expr> makeNullLiteral();
   static std::shared_ptr<Expr> makeColumnRef(const std::string& name);
   static std::shared_ptr<Expr> makeColumnRef(const std::string& table, const std::string& name);
