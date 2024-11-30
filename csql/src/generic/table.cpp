@@ -141,6 +141,11 @@ void Table::exportToCSV(const std::string& filename) {
   }
   file << std::endl;
 
+  if (size() == 0) {
+    file.close();
+    return;
+  }
+
   auto it = getIterator();
 
   while (it->hasNext()) {
