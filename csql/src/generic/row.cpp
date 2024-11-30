@@ -9,6 +9,24 @@
 
 namespace {
 
+bool isBytesLess(const std::string& left, const std::string& right) {
+  if (left.size() != right.size()) {
+    throw std::runtime_error("Invalid comparison");
+  }
+  for (size_t i = 0; i < left.size(); i++) {
+    if (left[i] < right[i]) return true;
+    if (left[i] > right[i]) return false;
+  }
+  return false;
+}
+
+bool isBytesEq(const std::string& left, const std::string& right) {
+  if (left.size() != right.size()) {
+    return false;
+  }
+  return left == right;
+}
+
 std::shared_ptr<csql::Expr> applyUnaryOpToLiteral(csql::OperatorType opType,
                                                   std::shared_ptr<csql::Expr> operand) {
   if (!operand->isLiteral()) {
@@ -150,9 +168,19 @@ std::shared_ptr<csql::Expr> applyBinaryOpToLiterals(std::shared_ptr<csql::Expr> 
       throw std::runtime_error("Byte arrays must be of the same size");
     }
     if (opType == csql::OperatorType::kOpEquals)
-      return csql::Expr::makeLiteral(left->name == right->name);
+      return csql::Expr::makeLiteral(isBytesEq(left->name, right->name));
     if (opType == csql::OperatorType::kOpNotEquals)
-      return csql::Expr::makeLiteral(left->name != right->name);
+      return csql::Expr::makeLiteral(!isBytesEq(left->name, right->name));
+    if (opType == csql::OperatorType::kOpLess)
+      return csql::Expr::makeLiteral(isBytesLess(left->name, right->name));
+    if (opType == csql::OperatorType::kOpLessEq)
+      return csql::Expr::makeLiteral(isBytesLess(left->name, right->name) ||
+                                     isBytesEq(left->name, right->name));
+    if (opType == csql::OperatorType::kOpGreater)
+      return csql::Expr::makeLiteral(!isBytesLess(left->name, right->name) &&
+                                     !isBytesEq(left->name, right->name));
+    if (opType == csql::OperatorType::kOpGreaterEq)
+      return csql::Expr::makeLiteral(!isBytesLess(left->name, right->name));
     throw std::runtime_error("Invalid operation on bytes: " + std::to_string(opType));
   }
   throw std::runtime_error("Invalid operation");

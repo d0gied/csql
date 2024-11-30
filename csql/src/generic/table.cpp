@@ -1,8 +1,10 @@
 #include "table.h"
 
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -240,14 +242,9 @@ void Table::exportToCSV(const std::string& filename) {
       } else if (column->type().data_type == DataType::BYTES) {
         auto bytes = row->get<std::vector<uint8_t>>(i);
         file << "0x";
-        bool has_non_zero = false;
         for (size_t j = 0; j < bytes.size(); j++) {
-          if (bytes[bytes.size() - j - 1] != 0) {
-            has_non_zero = true;
-          }
-          if (has_non_zero) {
-            file << std::hex << (int)bytes[bytes.size() - j - 1];
-          }
+          int byte = bytes[bytes.size() - j - 1];
+          file << std::setw(2) << std::setfill('0') << std::hex << byte;
         }
       } else {
         file << "null";
