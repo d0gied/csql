@@ -10,6 +10,7 @@
 #include "../sql/statements/insert.h"
 #include "column.h"
 #include "row.h"
+#include "sql/statements/delete.h"
 
 namespace csql {
 namespace storage {
@@ -27,6 +28,8 @@ class TableIterator {
   virtual TableIterator& operator++() = 0;
   virtual std::shared_ptr<Row> operator*() const = 0;
 
+  virtual std::shared_ptr<Iterator> getMemoryIterator() const = 0;
+
   friend class Table;
 };
 
@@ -38,6 +41,7 @@ class AllTableIterator : public TableIterator {
   virtual bool hasValue() const override;
   virtual AllTableIterator& operator++() override;
   virtual std::shared_ptr<Row> operator*() const override;
+  virtual std::shared_ptr<Iterator> getMemoryIterator() const override;
 
  protected:
   std::shared_ptr<Table> table_;
@@ -54,6 +58,7 @@ class WhereClauseIterator : public TableIterator {
   virtual bool hasValue() const override;
   virtual WhereClauseIterator& operator++() override;
   virtual std::shared_ptr<Row> operator*() const override;
+  virtual std::shared_ptr<Iterator> getMemoryIterator() const override;
 
  protected:
   std::shared_ptr<TableIterator> tableIterator_;
@@ -69,6 +74,7 @@ class Table : public std::enable_shared_from_this<Table> {
   static std::shared_ptr<Table> create(std::shared_ptr<CreateStatement> createStatement);
 
   void insert(std::shared_ptr<InsertStatement> insertStatement);
+  void delete_(std::shared_ptr<DeleteStatement> deleteStatement);
 
   std::shared_ptr<AllTableIterator> getIterator();
 

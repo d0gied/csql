@@ -476,6 +476,41 @@ bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
 
   return true;
 }
+
+bool parseDelete(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
+  csql::Token token = tokenizer.nextToken();
+  if (token.value != "FROM") {
+    result->setErrorDetails("Expected FROM", 0, 0, token);
+    return false;
+  }
+
+  token = tokenizer.nextToken();
+  if (token.type != csql::TokenType::NAME) {
+    result->setErrorDetails("Expected table name", 0, 0, token);
+    return false;
+  }
+
+  std::shared_ptr<csql::DeleteStatement> deleteStatement =
+      std::make_shared<csql::DeleteStatement>();
+  deleteStatement->fromTable = token.value;
+
+  token = tokenizer.nextToken();
+  if (token.value != "WHERE") {
+    result->setErrorDetails("Expected WHERE", 0, 0, token);
+    return false;
+  }
+
+  deleteStatement->whereClause = parseExpr(tokenizer, result, ";");
+
+  if (!deleteStatement->whereClause) {
+    return false;
+  }
+  result->addStatement(deleteStatement);
+  result->setIsValid(true);
+
+  return true;
+}
+
 }  // namespace
 
 namespace csql {
@@ -496,6 +531,8 @@ bool SQLParser::parse(const std::string &sql, std::shared_ptr<SQLParserResult> r
     return parseInsert(tokenizer, result);
   } else if (token.value == "SELECT") {
     return parseSelect(tokenizer, result);
+  } else if (token.value == "DELETE") {
+    return parseDelete(tokenizer, result);
   }
 
   result->setErrorDetails("Unknown keyword", 0, 0, token);

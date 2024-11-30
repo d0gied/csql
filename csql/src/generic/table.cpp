@@ -118,6 +118,22 @@ void Table::insert(std::shared_ptr<InsertStatement> insertStatement) {
   storage_->insert(*Cell::create(values));
 }
 
+void Table::delete_(std::shared_ptr<DeleteStatement> deleteStatement) {
+  auto it = getIterator();
+  while (it->hasValue()) {
+    auto row = *(*it);
+    auto expr = row->evaluate(deleteStatement->whereClause);
+    if (expr->type != kExprLiteralBool) {
+      throw std::runtime_error("Expected boolean expression");
+    }
+    if (expr->ival) {
+      storage_->remove(it->getMemoryIterator());
+    } else {
+      ++(*it);
+    }
+  }
+}
+
 std::shared_ptr<AllTableIterator> Table::getIterator() {
   return std::make_shared<AllTableIterator>(shared_from_this(), storage_->getIterator());
 }
@@ -136,6 +152,10 @@ std::shared_ptr<Row> AllTableIterator::operator*() const {
 AllTableIterator& AllTableIterator::operator++() {
   iterator_->next();
   return *this;
+}
+
+std::shared_ptr<Iterator> AllTableIterator::getMemoryIterator() const {
+  return iterator_;
 }
 
 WhereClauseIterator::WhereClauseIterator(std::shared_ptr<TableIterator> tableIterator,
@@ -176,6 +196,10 @@ WhereClauseIterator& WhereClauseIterator::operator++() {
     ++(*tableIterator_);
   }
   return *this;
+}
+
+std::shared_ptr<Iterator> WhereClauseIterator::getMemoryIterator() const {
+  return tableIterator_->getMemoryIterator();
 }
 
 void Table::exportToCSV(const std::string& filename) {

@@ -124,5 +124,12 @@ std::ostream& operator<<(std::ostream& stream, const SelectStatement& select_sta
 }
 
 // DeleteStatement
+std::ostream& operator<<(std::ostream& stream, const DeleteStatement& delete_statement) {
+  stream << "DELETE FROM " << delete_statement.fromTable;
+  if (delete_statement.whereClause) {
+    stream << " WHERE " << *delete_statement.whereClause;
+  }
+  return stream;
+}
 
 }  // namespace csql

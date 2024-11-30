@@ -1,10 +1,20 @@
 #include "dummy.h"
 
+#include "memory/iterator.h"
+
 namespace csql {
 namespace storage {
 
 void DummyStorage::insert(const Cell& cell) {
   cells_.push_back(cell);
+}
+
+void DummyStorage::remove(std::shared_ptr<Iterator> it) {
+  auto it_ = std::dynamic_pointer_cast<DummyIterator>(it);
+  if (!it_) {
+    throw std::runtime_error("Invalid iterator");
+  }
+  it_->it_ = cells_.erase(it_->it_);
 }
 
 std::shared_ptr<Iterator> DummyStorage::getIterator() {
@@ -17,10 +27,10 @@ void DummyStorage::clear() {
 }
 
 DummyIterator::DummyIterator(std::shared_ptr<DummyStorage> storage)
-    : storage_(storage), index_(0) {}
+    : storage_(storage), it_(storage->cells_.begin()) {}
 
 bool DummyIterator::hasValue() {
-  return index_ < storage_->cells_.size();
+  return it_ != storage_->cells_.end();
 }
 
 size_t DummyStorage::size() {
@@ -29,11 +39,11 @@ size_t DummyStorage::size() {
 
 void DummyIterator::next() {
   if (!hasValue()) return;
-  index_++;
+  ++it_;
 }
 
 Cell* DummyIterator::get() {
-  return &storage_->cells_[index_];
+  return &(*it_);
 }
 
 }  // namespace storage

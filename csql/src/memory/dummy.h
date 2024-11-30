@@ -14,6 +14,7 @@ class DummyStorage : public IStorage, public std::enable_shared_from_this<DummyS
   DummyStorage() = default;
 
   void insert(const Cell& cell) override;
+  void remove(std::shared_ptr<Iterator> it) override;
   std::shared_ptr<Iterator> getIterator() override;
   size_t size() override;
   void clear() override;
@@ -33,7 +34,7 @@ class DummyIterator : public Iterator {
   Cell* get() override;
 
  private:
-  size_t index_ = 0;
+  std::vector<Cell>::iterator it_;
   std::shared_ptr<DummyStorage> storage_;
 
   friend class DummyStorage;

@@ -32,6 +32,7 @@ class Row {
   std::shared_ptr<Expr> getColumnValue(std::string columnName);
 
   friend std::ostream& operator<<(std::ostream& stream, const Row& row);
+  friend class Table;
 
  private:
   std::weak_ptr<Table> table_;

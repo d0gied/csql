@@ -22,10 +22,11 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
       if (stmt->is(kStmtCreate)) {
         return create(std::dynamic_pointer_cast<CreateStatement>(stmt));
       } else if (stmt->is(kStmtInsert)) {
-        // return nullptr;
         return insert(std::dynamic_pointer_cast<InsertStatement>(stmt));
       } else if (stmt->is(kStmtSelect)) {
         return select(std::dynamic_pointer_cast<SelectStatement>(stmt));
+      } else if (stmt->is(kStmtDelete)) {
+        return delete_(std::dynamic_pointer_cast<DeleteStatement>(stmt));
       } else {
         std::cout << "Unknown statement" << std::endl;
       }
@@ -56,6 +57,14 @@ std::shared_ptr<TableIterator> Database::insert(std::shared_ptr<InsertStatement>
     throw std::runtime_error("Table not found: " + insertStatement->tableName);
   }
   tables_[insertStatement->tableName]->insert(insertStatement);
+  return nullptr;
+}
+
+std::shared_ptr<TableIterator> Database::delete_(std::shared_ptr<DeleteStatement> deleteStatement) {
+  if (tables_.count(deleteStatement->fromTable) == 0) {
+    throw std::runtime_error("Table not found: " + deleteStatement->fromTable);
+  }
+  tables_[deleteStatement->fromTable]->delete_(deleteStatement);
   return nullptr;
 }
 

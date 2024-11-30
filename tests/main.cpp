@@ -20,6 +20,7 @@ int main() {
       "insert (login=\"user1\", password_hash=0x2233445566778899) to "
       "users");
 
+  db.execute("DELETE FROM users WHERE login = \"admin\"");
   auto iterator = db.execute("SELECT login FROM users WHERE |login| % 2 = 1");
 
   while (iterator->hasValue()) {
