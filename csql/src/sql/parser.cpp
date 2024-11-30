@@ -2,10 +2,14 @@
 
 #include <boost/regex.hpp>
 #include <cstring>
+#include <memory>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 #include "sql/column_type.h"
+#include "sql/expr.h"
+#include "sql/grammar.h"
 #include "sql/parser_result.h"
 #include "sql/statements/create.h"
 #include "sql/statements/insert.h"
@@ -271,6 +275,186 @@ bool parseInsert(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
   return true;
 }
 
+std::shared_ptr<csql::Expr> applyOpOnSameLevel(
+    std::shared_ptr<csql::Expr> left, csql::OperatorType op,
+    std::shared_ptr<csql::Expr> right = nullptr,
+    bool isInlineNot = false  // inline NOT operator (IS NOT NULL)
+) {
+  if (csql::isUnaryOperator(op)) {
+    if (left->isLiteral() || !(left->opType < op)) {
+      auto res = csql::Expr::makeOpUnary(op, left);
+      if (isInlineNot) {
+        res = csql::Expr::makeOpUnary(csql::OperatorType::kOpNot, res);
+      }
+      return res;
+    } else if (isUnaryOperator(left->opType)) {
+      left->expr = applyOpOnSameLevel(left->expr, op, nullptr, isInlineNot);
+      return left;
+    } else {
+      left->expr2 = applyOpOnSameLevel(left->expr2, op, nullptr, isInlineNot);
+      return left;
+    }
+  } else {
+    if (left->isLiteral()) {
+      return csql::Expr::makeOpBinary(left, op, right);  // left is a literal or unary operator
+    } else if (left->opType < op) {
+      if (isUnaryOperator(left->opType)) {
+        left->expr = applyOpOnSameLevel(left->expr, op, right);
+        return left;
+      } else {
+        left->expr2 = applyOpOnSameLevel(left->expr2, op, right);  // go down the tree
+        return left;
+      }
+    } else {
+      return csql::Expr::makeOpBinary(left, op, right);  // left is higher or equal
+    }
+  }
+}
+
+std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
+                                      std::shared_ptr<csql::SQLParserResult> result,
+                                      const std::string_view until = "") {
+  csql::Token token = tokenizer.nextToken();
+  std::shared_ptr<csql::Expr> left;
+
+  if (token.value == "(") {
+    left = csql::Expr::makeOpUnary(csql::OperatorType::kOpParenthesis,
+                                   parseExpr(tokenizer, result, ")"));
+  } else if (token.value == "|") {
+    left =
+        csql::Expr::makeOpUnary(csql::OperatorType::kOpLength, parseExpr(tokenizer, result, "|"));
+  } else if (token.value == "NOT") {
+    left = csql::Expr::makeOpUnary(csql::OperatorType::kOpNot, parseExpr(tokenizer, result));
+  } else if (token.value == "-") {
+    left = csql::Expr::makeOpUnary(csql::OperatorType::kOpUnaryMinus, parseExpr(tokenizer, result));
+  } else if (token.value == "~") {
+    left = csql::Expr::makeOpUnary(csql::OperatorType::kOpBitNot, parseExpr(tokenizer, result));
+  } else if (token.type == csql::TokenType::INTEGER) {
+    left = csql::Expr::makeLiteral(std::stoi(token.value));
+  } else if (token.type == csql::TokenType::STRING) {
+    left = csql::Expr::makeLiteral(token.value);
+  } else if (token.type == csql::TokenType::HEX) {
+    left = csql::Expr::makeLiteral(token.value);
+  } else if (token.value == "TRUE") {
+    left = csql::Expr::makeLiteral(true);
+  } else if (token.value == "FALSE") {
+    left = csql::Expr::makeLiteral(false);
+  } else if (token.type == csql::TokenType::NAME || token.type == csql::TokenType::COLUMN_NAME) {
+    left = csql::Expr::makeColumnRef(token.value);
+  } else {
+    result->setErrorDetails("Expected expression", 0, 0, token);
+    return nullptr;
+  }
+  if (until.empty()) {
+    return left;
+  }
+
+  token = tokenizer.nextToken();
+  while (token.value != until && token.type != csql::TokenType::TERMINAL) {
+    if (token.type != csql::TokenType::OPERATOR && token.value != "OR" && token.value != "AND" &&
+        token.value != "IS NULL" && token.value != "IS NOT NULL") {
+      result->setErrorDetails("Expected operator", 0, 0, token);
+      return nullptr;
+    }
+
+    csql::OperatorType op;
+    if (token.value == "OR") {
+      op = csql::OperatorType::kOpOr;
+    } else if (token.value == "AND") {
+      op = csql::OperatorType::kOpAnd;
+    } else if (token.value == "+") {
+      op = csql::OperatorType::kOpPlus;
+    } else if (token.value == "-") {
+      op = csql::OperatorType::kOpMinus;
+    } else if (token.value == "*") {
+      op = csql::OperatorType::kOpAsterisk;
+    } else if (token.value == "/") {
+      op = csql::OperatorType::kOpSlash;
+    } else if (token.value == "%") {
+      op = csql::OperatorType::kOpPercentage;
+    } else if (token.value == "=") {
+      op = csql::OperatorType::kOpEquals;
+    } else if (token.value == "!=") {
+      op = csql::OperatorType::kOpNotEquals;
+    } else if (token.value == "<") {
+      op = csql::OperatorType::kOpLess;
+    } else if (token.value == "<=") {
+      op = csql::OperatorType::kOpLessEq;
+    } else if (token.value == ">") {
+      op = csql::OperatorType::kOpGreater;
+    } else if (token.value == ">=") {
+      op = csql::OperatorType::kOpGreaterEq;
+    } else if (token.value == "IN") {
+      op = csql::OperatorType::kOpIn;
+    } else if (token.value == "IS NULL" || token.value == "IS NOT NULL") {
+      op = csql::OperatorType::kOpIsNull;
+    } else {
+      result->setErrorDetails("Unknown operator", 0, 0, token);
+      return nullptr;
+    }
+
+    if (op == csql::OperatorType::kOpIn) {
+      result->setErrorDetails("IN operator is not supported", 0, 0, token);
+      return nullptr;
+    } else if (op == csql::OperatorType::kOpIsNull) {
+      left = applyOpOnSameLevel(left, op, nullptr, token.value == "IS NOT NULL");
+    } else {
+      std::shared_ptr<csql::Expr> right = parseExpr(tokenizer, result);
+      if (!right) {
+        return nullptr;
+      }
+      left = applyOpOnSameLevel(left, op, right);  // if op is higher precedence, it will go down
+                                                   // the tree until it finds the right place
+    }
+
+    token = tokenizer.nextToken();
+  }
+  return left;
+}
+
+bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
+  csql::Token token = tokenizer.nextToken();
+  std::shared_ptr<std::vector<std::shared_ptr<csql::Expr>>> selectList =
+      std::make_shared<std::vector<std::shared_ptr<csql::Expr>>>();
+  if (token.value != "*") {
+    result->setErrorDetails("Only * is supported", 0, 0, token);
+    return false;
+  }
+  selectList->push_back(csql::Expr::makeStar());
+
+  token = tokenizer.nextToken();
+  if (token.value != "FROM") {
+    result->setErrorDetails("Expected FROM", 0, 0, token);
+    return false;
+  }
+
+  token = tokenizer.nextToken();
+  if (token.type != csql::TokenType::NAME) {
+    result->setErrorDetails("Expected table name", 0, 0, token);
+    return false;
+  }
+
+  std::shared_ptr<csql::SelectStatement> selectStatement =
+      std::make_shared<csql::SelectStatement>();
+  selectStatement->fromTable = token.value;
+  selectStatement->selectList = selectList;
+
+  token = tokenizer.nextToken();
+  if (token.value != "WHERE") {
+    result->setErrorDetails("Expected WHERE", 0, 0, token);
+    return false;
+  }
+
+  selectStatement->whereClause = parseExpr(tokenizer, result, ";");
+
+  if (!selectStatement->whereClause) {
+    return false;
+  }
+  result->addStatement(selectStatement);
+  result->setIsValid(true);
+
+  return true;
+}
 }  // namespace
 
 namespace csql {
@@ -289,6 +473,8 @@ bool SQLParser::parse(const std::string &sql, std::shared_ptr<SQLParserResult> r
     return parseCreate(tokenizer, result);
   } else if (token.value == "INSERT") {
     return parseInsert(tokenizer, result);
+  } else if (token.value == "SELECT") {
+    return parseSelect(tokenizer, result);
   }
 
   result->setErrorDetails("Unknown keyword", 0, 0, token);

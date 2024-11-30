@@ -4,6 +4,7 @@
 
 #include "sql/parser.h"
 #include "sql/statements.h"
+#include "sql/statements/statement.h"
 #include "table.h"
 
 namespace csql {
@@ -22,6 +23,9 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
         // return nullptr;
         return insert(std::dynamic_pointer_cast<InsertStatement>(stmt));
       } else if (stmt->is(kStmtSelect)) {
+        std::shared_ptr<SelectStatement> selectStatement =
+            std::dynamic_pointer_cast<SelectStatement>(stmt);
+        std::cout << selectStatement->whereClause->toMermaid("A") << std::endl;
         return nullptr;
         // return select(std::dynamic_pointer_cast<SelectStatement>(stmt));
       } else {

@@ -16,14 +16,16 @@ struct LimitDescription {
 
 // Representation of a full SQL select statement.
 struct SelectStatement : SQLStatement {
-  SelectStatement() = default;
+  SelectStatement() : SQLStatement(kStmtSelect), selectDistinct(false) {}
   ~SelectStatement() override = default;
 
   std::string fromTable;
   bool selectDistinct;
-  std::shared_ptr<std::vector<std::shared_ptr<Expr>>> selectList;
+  std::shared_ptr<std::vector<std::shared_ptr<Expr>>> selectList;  // List of expressions to select.
   std::shared_ptr<Expr> whereClause;
   // std::shared_ptr<LimitDescription> limit;
 };
+
+std::ostream &operator<<(std::ostream &stream, const SelectStatement &select_statement);
 
 }  // namespace csql

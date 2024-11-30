@@ -105,13 +105,23 @@ std::ostream& operator<<(std::ostream& stream, const InsertStatement& insert_sta
 // LimitDescription::LimitDescription(Expr* limit, Expr* offset) : limit(limit), offset(offset) {}
 
 // SelectStatement
-// SelectStatement::SelectStatement()
-//     : SQLStatement(kStmtSelect),
-//       fromTable(""),
-//       selectDistinct(false),
-//       selectList(nullptr),
-//       whereClause(nullptr) {}
-// limit(nullptr) {}
+std::ostream& operator<<(std::ostream& stream, const SelectStatement& select_statement) {
+  stream << "SELECT ";
+  if (select_statement.selectDistinct) {
+    stream << "DISTINCT ";
+  }
+  for (size_t i = 0; i < select_statement.selectList->size(); i++) {
+    stream << *select_statement.selectList->at(i);
+    if (i + 1 < select_statement.selectList->size()) {
+      stream << ", ";
+    }
+  }
+  stream << " FROM " << select_statement.fromTable;
+  if (select_statement.whereClause) {
+    stream << " WHERE " << *select_statement.whereClause;
+  }
+  return stream;
+}
 
 // UpdateStatement
 /*

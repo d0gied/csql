@@ -76,6 +76,8 @@ std::ostream& operator<<(std::ostream& stream, const SQLParserResult& result) {
         stream << *std::dynamic_pointer_cast<CreateStatement>(stmt) << std::endl;
       } else if (stmt->is(kStmtInsert)) {
         stream << *std::dynamic_pointer_cast<InsertStatement>(stmt) << std::endl;
+      } else if (stmt->is(kStmtSelect)) {
+        stream << *std::dynamic_pointer_cast<SelectStatement>(stmt) << std::endl;
       } else {
         stream << "Unknown statement" << std::endl;
       }

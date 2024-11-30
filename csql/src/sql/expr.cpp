@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <string>
+
 #include "statements/select.h"
 
 namespace csql {
@@ -18,6 +20,85 @@ Expr::Expr(ExprType type)
       columnType(DataType::UNKNOWN, 0),
       opType(kOpNone),
       distinct(false) {}
+
+bool isUnaryOperator(OperatorType op) {
+  return op == kOpUnaryMinus || op == kOpNot || op == kOpIsNull || op == kOpExists ||
+         op == kOpParenthesis || op == kOpBitNot || op == kOpLength;
+}
+
+bool isBinaryOperator(OperatorType op) {
+  return !isUnaryOperator(op);
+}
+
+bool isLogicalOperator(OperatorType op) {
+  return op == kOpAnd || op == kOpOr || op == kOpNot;
+}
+
+bool isComparisonOperator(OperatorType op) {
+  return op == kOpEquals || op == kOpNotEquals || op == kOpLess || op == kOpLessEq ||
+         op == kOpGreater || op == kOpGreaterEq;
+}
+
+bool isArithmeticOperator(OperatorType op) {
+  return op == kOpPlus || op == kOpMinus || op == kOpAsterisk || op == kOpSlash ||
+         op == kOpPercentage;
+}
+
+bool operator<(OperatorType lhs, OperatorType rhs) {
+  if (isUnaryOperator(lhs) && isUnaryOperator(rhs)) {
+    if (lhs == kOpParenthesis || lhs == kOpLength || lhs == kOpBitNot || lhs == kOpUnaryMinus ||
+        lhs == kOpIsNull || lhs == kOpExists) {
+      return false;
+    } else if (rhs == kOpParenthesis || rhs == kOpLength || rhs == kOpBitNot ||
+               rhs == kOpUnaryMinus || rhs == kOpIsNull || rhs == kOpExists) {
+      return true;
+    }
+
+    if (lhs == kOpNot) {
+      return false;
+    } else if (rhs == kOpNot) {
+      return true;
+    }
+    throw std::runtime_error("Unknown unary operator: " + std::to_string(lhs) + " vs. " +
+                             std::to_string(rhs));
+
+  } else if (isUnaryOperator(lhs) && isBinaryOperator(rhs)) {
+    return isLogicalOperator(lhs);  // Unary operators have higher precedence.
+  } else if (isBinaryOperator(lhs) && isUnaryOperator(rhs)) {
+    return !isLogicalOperator(rhs);  // Unary operators have higher precedence.
+  }
+  // Both are binary operators.
+
+  if (isLogicalOperator(lhs) && isLogicalOperator(rhs)) {
+    return (lhs == kOpAnd) < (rhs == kOpAnd);  // AND has higher precedence than OR.
+  } else if (isLogicalOperator(lhs)) {
+    return true;  // Logical operators have lower precedence than arithmetic/comparison.
+  } else if (isLogicalOperator(rhs)) {
+    return false;  // Logical operators have lower precedence than arithmetic/comparison.
+  }
+
+  // Comparison operators
+  if (isComparisonOperator(lhs) && isComparisonOperator(rhs)) {
+    return false;  // All comparison operators have the same precedence.
+  }
+
+  // Arithmetic vs. comparison
+  if (isArithmeticOperator(lhs) && isComparisonOperator(rhs)) {
+    return false;  // Arithmetic operators have higher precedence.
+  } else if (isComparisonOperator(lhs) && isArithmeticOperator(rhs)) {
+    return true;  // Logical/comparison operators have lower precedence.
+  }
+
+  // Arithmetic operators
+  if (isArithmeticOperator(lhs) && isArithmeticOperator(rhs)) {
+    // *, /, % have higher precedence than +, -
+    return (lhs == kOpAsterisk || lhs == kOpSlash || lhs == kOpPercentage) <
+           (rhs == kOpAsterisk || rhs == kOpSlash || rhs == kOpPercentage);
+  }
+
+  throw std::runtime_error("Unknown operator type: " + std::to_string(lhs) + " vs. " +
+                           std::to_string(rhs));
+}
 
 std::shared_ptr<Expr> Expr::make(ExprType type) {
   std::shared_ptr<Expr> e = std::make_shared<Expr>(type);
@@ -132,12 +213,6 @@ std::shared_ptr<Expr> Expr::makeStar(const std::string& table) {
   return e;
 }
 
-std::shared_ptr<Expr> Expr::makeParameter(int id) {
-  std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprParameter);
-  e->ival = id;
-  return e;
-}
-
 std::shared_ptr<Expr> Expr::makeSelect(std::shared_ptr<SelectStatement> select) {
   std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprSelect);
   e->select = select;
@@ -149,8 +224,8 @@ bool Expr::isType(ExprType exprType) const {
 }
 
 bool Expr::isLiteral() const {
-  return isType(kExprLiteralInt) || isType(kExprLiteralString) || isType(kExprParameter) ||
-         isType(kExprLiteralNull);
+  return isType(kExprLiteralInt) || isType(kExprLiteralString) || isType(kExprLiteralNull) ||
+         isType(kExprLiteralBool) || isType(kExprLiteralBytes) || isType(kExprColumnRef);
 }
 
 bool Expr::hasTable() const {
@@ -201,79 +276,109 @@ std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
       stream << "*";
       break;
     case kExprOperator:
-      stream << "(";
-      if (expr.expr) {
-        stream << *expr.expr;
-      }
-      switch (expr.opType) {
-        case kOpPlus:
-          stream << " + ";
-          break;
-        case kOpMinus:
-          stream << " - ";
-          break;
-        case kOpAsterisk:
-          stream << " * ";
-          break;
-        case kOpSlash:
-          stream << " / ";
-          break;
-        case kOpPercentage:
-          stream << " % ";
-          break;
-        case kOpEquals:
-          stream << " = ";
-          break;
-        case kOpNotEquals:
-          stream << " != ";
-          break;
-        case kOpLess:
-          stream << " < ";
-          break;
-        case kOpLessEq:
-          stream << " <= ";
-          break;
-        case kOpGreater:
-          stream << " > ";
-          break;
-        case kOpGreaterEq:
-          stream << " >= ";
-          break;
-        case kOpAnd:
-          stream << " AND ";
-          break;
-        case kOpOr:
-          stream << " OR ";
-          break;
-        case kOpIn:
-          stream << " IN ";
-          break;
-        case kOpNot:
-          stream << " NOT ";
-          break;
-        case kOpUnaryMinus:
-          stream << " -";
-          break;
-        case kOpIsNull:
-          stream << " IS NULL";
-          break;
-        case kOpExists:
-          stream << " EXISTS";
-          break;
-        default:
-          stream << " UNKNOWN";
-          break;
-      }
-      if (expr.expr2) {
-        stream << *expr.expr2;
-      }
-      stream << ")";
+      stream << "(" << "OPERATOR" << ")";  // TODO: Implement this.
       break;
-    case kExprSelect:
-      stream << *expr.select;
+    default:
+      stream << "UNKNOWN";
       break;
   }
   return stream;
+}
+
+std::string Expr::toMermaid(std::string node_name, bool subexpr) const {
+  std::string result = node_name + "{";
+  switch (type) {
+    case kExprLiteralInt:
+      result = node_name + "[" + std::to_string(ival) + "]";
+      break;
+    case kExprLiteralString:
+      result = node_name + "[\'" + name + "\']";
+      break;
+    case kExprLiteralBool:
+      result = node_name + "[" + (ival == 1 ? "true" : "false") + "]";
+      break;
+    case kExprLiteralBytes:
+      result = node_name + "[0x";
+      for (size_t j = 0; j < name.size(); j++) {
+        uint8_t byte = name[name.size() - j - 1];
+        result += std::to_string(byte);
+      }
+      result += "]";
+      break;
+    case kExprLiteralNull:
+      result = node_name + "[NULL]";
+      break;
+    case kExprColumnRef:
+      result = node_name + "(" + name + ")";
+      break;
+    case kExprStar:
+      result = node_name + "(*)";
+      break;
+    case kExprOperator: {
+      if (opType == kOpUnaryMinus || opType == kOpMinus) {
+        result += "-}";
+      } else if (opType == kOpPlus) {
+        result += "'+'}";
+      } else if (opType == kOpAsterisk) {
+        result += "'*'}";
+      } else if (opType == kOpSlash) {
+        result += "'/'}";
+      } else if (opType == kOpPercentage) {
+        result += "'%'}";
+      } else if (opType == kOpEquals) {
+        result += "=}";
+      } else if (opType == kOpNotEquals) {
+        result += "'!='}";
+      } else if (opType == kOpLess) {
+        result += "'<'}";
+      } else if (opType == kOpLessEq) {
+        result += "'<='}";
+      } else if (opType == kOpGreater) {
+        result += "'>'}";
+      } else if (opType == kOpGreaterEq) {
+        result += "'>='}";
+      } else if (opType == kOpAnd) {
+        result += "AND}";
+      } else if (opType == kOpOr) {
+        result += "OR}";
+      } else if (opType == kOpIn) {
+        result += "IN}";
+      } else if (opType == kOpNot) {
+        result += "NOT}";
+      } else if (opType == kOpIsNull) {
+        result += "IS NULL}";
+      } else if (opType == kOpExists) {
+        result += "EXISTS}";
+      } else if (opType == kOpParenthesis) {
+        result = expr->toMermaid(node_name, true);
+        if (!subexpr) {
+          result = "graph TD\n  " + result;
+        }
+        return result;
+      } else if (opType == kOpBitNot) {
+        result += "NOT}";
+      } else if (opType == kOpLength) {
+        result += "LENGTH}";
+      }
+    } break;
+    case kExprSelect:
+      result += "SELECT}";
+      break;
+  }
+  result = result + "\n";
+  if (expr) {
+    result += "  " + expr->toMermaid(node_name + "L", true);
+    result += "  " + node_name + " --> " + node_name + "L\n";
+  }
+  if (expr2) {
+    result += "  " + expr2->toMermaid(node_name + "R", true);
+    result += "  " + node_name + " --> " + node_name + "R\n";
+  }
+
+  if (!subexpr) {
+    result = "graph TD\n  " + result;
+  }
+  return result;
 }
 
 }  // namespace csql

@@ -19,7 +19,6 @@ enum ExprType {
   kExprLiteralNull,
 
   kExprStar,
-  kExprParameter,
   kExprColumnRef,
   kExprOperator,
   kExprSelect,
@@ -27,34 +26,45 @@ enum ExprType {
 
 // Operator types. These are important for expressions of type kExprOperator.
 enum OperatorType {
-  kOpNone,
+  kOpNone,  // 0
 
   // Binary operators.
-  kOpPlus,
-  kOpMinus,
-  kOpAsterisk,
-  kOpSlash,
-  kOpPercentage,
+  kOpPlus,        // 1
+  kOpMinus,       // 2
+  kOpAsterisk,    // 3
+  kOpSlash,       // 4
+  kOpPercentage,  // 5
 
-  kOpEquals,
-  kOpNotEquals,
-  kOpLess,
-  kOpLessEq,
-  kOpGreater,
-  kOpGreaterEq,
-  kOpLike,
-  kOpNotLike,
-  kOpILike,
-  kOpAnd,
-  kOpOr,
-  kOpIn,
+  kOpEquals,     // 6
+  kOpNotEquals,  // 7
+  kOpLess,       // 8
+  kOpLessEq,     // 9
+  kOpGreater,    // 10
+  kOpGreaterEq,  // 11
+  kOpLike,       // 12
+  kOpNotLike,    // 13
+  kOpILike,      // 14
+  kOpAnd,        // 15
+  kOpOr,         // 16
+  kOpIn,         // 17
 
   // Unary operators.
-  kOpNot,
-  kOpUnaryMinus,
-  kOpIsNull,
-  kOpExists
+  kOpNot,          // NOT expr
+  kOpBitNot,       // ~expr
+  kOpUnaryMinus,   // -expr
+  kOpLength,       // |expr|
+  kOpIsNull,       // IS NULL
+  kOpExists,       // EXISTS
+  kOpParenthesis,  // (expr)
 };
+
+bool isUnaryOperator(OperatorType op);
+bool isBinaryOperator(OperatorType op);
+bool isLogicalOperator(OperatorType op);
+bool isComparisonOperator(OperatorType op);
+bool isArithmeticOperator(OperatorType op);
+
+bool operator<(OperatorType lhs, OperatorType rhs);
 
 typedef struct Expr Expr;
 
@@ -102,6 +112,9 @@ struct Expr {
   static std::shared_ptr<Expr> makeParameter(int id);
   static std::shared_ptr<Expr> makeSelect(std::shared_ptr<SelectStatement> select);
   static std::shared_ptr<Expr> makeCast(std::shared_ptr<Expr> expr, ColumnType columnType);
+
+  // Debugging.
+  std::string toMermaid(const std::string node_name = "A", bool subexpr = false) const;
 };
 
 std::ostream& operator<<(std::ostream&, const Expr&);

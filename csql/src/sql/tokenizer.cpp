@@ -25,8 +25,8 @@ std::string tokenTypeToString(TokenType type) {
       return "TYPE";
     case TokenType::NAME:
       return "NAME";
-    case TokenType::NAME_LEN:
-      return "NAME_LEN";
+    case csql::TokenType::COLUMN_NAME:
+      return "COLUMN_NAME";
     case TokenType::ALL_COLS:
       return "ALL_COLS";
     case TokenType::OPERATOR:
@@ -56,7 +56,7 @@ SQLTokenizer::SQLTokenizer(const std::string &sql) : sql_(sql) {
 
 const Token SQLTokenizer::nextToken() {
   std::string value = *next;
-  TokenType type = TokenType::NONE;
+  TokenType type = TokenType::TERMINAL;
 
   if (boost::regex_match(value, boost::regex(token::KEYWORDS, boost::regex::icase))) {
     type = TokenType::KEYWORD;
@@ -64,10 +64,10 @@ const Token SQLTokenizer::nextToken() {
   } else if (boost::regex_match(value, boost::regex(token::TYPE, boost::regex::icase))) {
     type = TokenType::TYPE;
     value = uppercase(value);
+  } else if (boost::regex_match(value, boost::regex(token::COLUMN_NAME))) {
+    type = TokenType::COLUMN_NAME;  // before NAME
   } else if (boost::regex_match(value, boost::regex(token::NAME))) {
     type = TokenType::NAME;
-  } else if (boost::regex_match(value, boost::regex(token::NAME_LEN))) {
-    type = TokenType::NAME_LEN;
   } else if (boost::regex_match(value, boost::regex(token::ALL_COLS))) {
     type = TokenType::ALL_COLS;
   } else if (boost::regex_match(value, boost::regex(token::OPERATOR))) {
@@ -82,7 +82,7 @@ const Token SQLTokenizer::nextToken() {
     type = TokenType::WHITESPACE;
   } else if (boost::regex_match(value, boost::regex(token::TERMINAL))) {
     type = TokenType::TERMINAL;
-  } else if (boost::regex_match(value, boost::regex(token::STRING))) {
+  } else if (!value.empty() && boost::regex_match(value, boost::regex(token::STRING))) {
     type = TokenType::STRING;
   }
   ++next;
