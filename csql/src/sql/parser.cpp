@@ -339,6 +339,10 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
     left = csql::Expr::makeLiteral(true);
   } else if (token.value == "FALSE") {
     left = csql::Expr::makeLiteral(false);
+  } else if (token.value == "NULL") {
+    left = csql::Expr::makeNullLiteral();
+  } else if (token.value == "*") {
+    left = csql::Expr::makeStar();
   } else if (token.type == csql::TokenType::NAME || token.type == csql::TokenType::COLUMN_NAME) {
     left = csql::Expr::makeColumnRef(token.value);
   } else {
@@ -413,14 +417,31 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
 }
 
 bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
-  csql::Token token = tokenizer.nextToken();
+  csql::Token token = tokenizer.get();
   std::shared_ptr<std::vector<std::shared_ptr<csql::Expr>>> selectList =
       std::make_shared<std::vector<std::shared_ptr<csql::Expr>>>();
-  if (token.value != "*") {
-    result->setErrorDetails("Only * is supported", 0, 0, token);
-    return false;
+
+  while (token.value != "FROM") {
+    std::shared_ptr<csql::Expr> expr = parseExpr(tokenizer, result);
+    if (!expr) {
+      return false;
+    }
+    if (expr->type == csql::ExprType::kExprStar) {
+      result->setErrorDetails("Cannot use * in SELECT", 0, 0, token);
+      return false;
+    } else if (expr->type != csql::ExprType::kExprColumnRef) {
+      result->setErrorDetails("Expected expression", 0, 0, token);
+      return false;
+    }
+    selectList->push_back(expr);
+    token = tokenizer.get();
+    if (token.value == ",") {
+      token = tokenizer.nextToken();
+    } else if (token.value != "FROM") {
+      result->setErrorDetails("Expected , or FROM", 0, 0, token);
+      return false;
+    }
   }
-  selectList->push_back(csql::Expr::makeStar());
 
   token = tokenizer.nextToken();
   if (token.value != "FROM") {
@@ -434,8 +455,8 @@ bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
     return false;
   }
 
-  std::shared_ptr<csql::SelectStatement> selectStatement =
-      std::make_shared<csql::SelectStatement>();
+  std::shared_ptr<csql::DeleteStatement> selectStatement =
+      std::make_shared<csql::DeleteStatement>();
   selectStatement->fromTable = token.value;
   selectStatement->selectList = selectList;
 

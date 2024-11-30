@@ -6,19 +6,12 @@
 
 #include "expr.h"
 
-namespace csql
-{
+namespace csql {
 
-  struct SelectStatement;
-  struct TableRef;
+struct DeleteStatement;
+struct TableRef;
 
-  // Possible table reference types.
-  enum TableRefType
-  {
-    kTableName,
-    kTableSelect,
-    kTableJoin,
-    kTableCrossProduct
-  };
+// Possible table reference types.
+enum TableRefType { kTableName, kTableSelect, kTableJoin, kTableCrossProduct };
 
-} // namespace csql
+}  // namespace csql

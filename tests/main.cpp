@@ -14,13 +14,13 @@ int main() {
       "insert (login=\"admin\", password_hash=0x0011223344556677, is_admin=true) to "
       "users");
   db.execute(
-      "insert (login=\"user1\", password_hash=0x0011223344556677) to "
+      "insert (login=\"user\", password_hash=0x0011223344556677) to "
       "users");
   db.execute(
-      "insert (login=\"user2\", password_hash=0x2233445566778899) to "
+      "insert (login=\"user1\", password_hash=0x2233445566778899) to "
       "users");
 
-  auto iterator = db.execute("SELECT * FROM users WHERE password_hash=0x0011223344556677");
+  auto iterator = db.execute("SELECT login FROM users WHERE |login| % 2 = 1");
 
   while (iterator->hasValue()) {
     auto row = *(*iterator);

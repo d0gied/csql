@@ -21,7 +21,7 @@ class Database {
 
  private:
   std::shared_ptr<TableIterator> create(std::shared_ptr<CreateStatement> createStatement);
-  std::shared_ptr<TableIterator> select(std::shared_ptr<SelectStatement> selectStatement);
+  std::shared_ptr<TableIterator> select(std::shared_ptr<DeleteStatement> selectStatement);
   std::shared_ptr<TableIterator> insert(std::shared_ptr<InsertStatement> insertStatement);
 
   std::unordered_map<std::string, std::shared_ptr<Table>> tables_;

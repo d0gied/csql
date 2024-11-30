@@ -9,7 +9,7 @@
 // #include "sql/statements/select.h"
 
 namespace csql {
-struct SelectStatement;
+struct DeleteStatement;
 struct OrderDescription;
 
 enum ExprType {
@@ -79,7 +79,7 @@ struct Expr {
   // TODO: Replace expressions by list.
   std::shared_ptr<Expr> expr;
   std::shared_ptr<Expr> expr2;
-  std::shared_ptr<SelectStatement> select;
+  std::shared_ptr<DeleteStatement> select;
   std::string name;
   std::string table;
   int32_t ival;
@@ -113,7 +113,7 @@ struct Expr {
   static std::shared_ptr<Expr> makeStar(void);
   static std::shared_ptr<Expr> makeStar(const std::string& table);
   static std::shared_ptr<Expr> makeParameter(int id);
-  static std::shared_ptr<Expr> makeSelect(std::shared_ptr<SelectStatement> select);
+  static std::shared_ptr<Expr> makeSelect(std::shared_ptr<DeleteStatement> select);
   static std::shared_ptr<Expr> makeCast(std::shared_ptr<Expr> expr, ColumnType columnType);
 
   // Debugging.

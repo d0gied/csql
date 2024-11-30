@@ -54,7 +54,7 @@ SQLTokenizer::SQLTokenizer(const std::string &sql) : sql_(sql) {
   next = boost::sregex_token_iterator(sql_.begin(), sql_.end(), re);
 }
 
-const Token SQLTokenizer::nextToken() {
+const Token SQLTokenizer::get() {
   std::string value = *next;
   TokenType type = TokenType::TERMINAL;
 
@@ -85,8 +85,17 @@ const Token SQLTokenizer::nextToken() {
   } else if (!value.empty() && boost::regex_match(value, boost::regex(token::STRING))) {
     type = TokenType::STRING;
   }
+  if (type == TokenType::WHITESPACE) {
+    ++next;
+    return get();
+  }
+  return Token{type, value};
+}
+
+const Token SQLTokenizer::nextToken() {
+  auto token = get();
   ++next;
-  return type != TokenType::WHITESPACE ? Token{type, value} : nextToken();  // Skip whitespaces
+  return token;
 }
 
 bool SQLTokenizer::hasNext() const {

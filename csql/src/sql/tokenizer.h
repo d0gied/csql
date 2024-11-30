@@ -17,6 +17,7 @@ class SQLTokenizer {
  public:
   SQLTokenizer(const std::string &sql);
 
+  const Token get();
   const Token nextToken();
   bool hasNext() const;
 

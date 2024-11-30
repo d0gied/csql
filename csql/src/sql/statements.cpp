@@ -105,7 +105,7 @@ std::ostream& operator<<(std::ostream& stream, const InsertStatement& insert_sta
 // LimitDescription::LimitDescription(Expr* limit, Expr* offset) : limit(limit), offset(offset) {}
 
 // SelectStatement
-std::ostream& operator<<(std::ostream& stream, const SelectStatement& select_statement) {
+std::ostream& operator<<(std::ostream& stream, const DeleteStatement& select_statement) {
   stream << "SELECT ";
   if (select_statement.selectDistinct) {
     stream << "DISTINCT ";
