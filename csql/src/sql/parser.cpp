@@ -455,8 +455,8 @@ bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
     return false;
   }
 
-  std::shared_ptr<csql::DeleteStatement> selectStatement =
-      std::make_shared<csql::DeleteStatement>();
+  std::shared_ptr<csql::SelectStatement> selectStatement =
+      std::make_shared<csql::SelectStatement>();
   selectStatement->fromTable = token.value;
   selectStatement->selectList = selectList;
 

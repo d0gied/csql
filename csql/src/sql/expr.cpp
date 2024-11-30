@@ -235,7 +235,7 @@ std::shared_ptr<Expr> Expr::makeStar(const std::string& table) {
   return e;
 }
 
-std::shared_ptr<Expr> Expr::makeSelect(std::shared_ptr<DeleteStatement> select) {
+std::shared_ptr<Expr> Expr::makeSelect(std::shared_ptr<SelectStatement> select) {
   std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprSelect);
   e->select = select;
   return e;

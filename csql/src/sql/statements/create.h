@@ -10,7 +10,7 @@
 #include "statement.h"
 
 namespace csql {
-struct DeleteStatement;
+struct SelectStatement;
 
 enum struct ConstraintType {
   None,

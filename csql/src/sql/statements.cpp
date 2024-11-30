@@ -105,7 +105,7 @@ std::ostream& operator<<(std::ostream& stream, const InsertStatement& insert_sta
 // LimitDescription::LimitDescription(Expr* limit, Expr* offset) : limit(limit), offset(offset) {}
 
 // SelectStatement
-std::ostream& operator<<(std::ostream& stream, const DeleteStatement& select_statement) {
+std::ostream& operator<<(std::ostream& stream, const SelectStatement& select_statement) {
   stream << "SELECT ";
   if (select_statement.selectDistinct) {
     stream << "DISTINCT ";
@@ -123,26 +123,6 @@ std::ostream& operator<<(std::ostream& stream, const DeleteStatement& select_sta
   return stream;
 }
 
-// UpdateStatement
-/*
-UpdateStatement::UpdateStatement()
-    : SQLStatement(kStmtUpdate),
-      table(nullptr),
-      updates(nullptr),
-      where(nullptr) {}
+// DeleteStatement
 
-UpdateStatement::~UpdateStatement() {
-  delete table;
-  delete where;
-
-  if (updates) {
-    for (UpdateClause* update : *updates) {
-      free(update->column);
-      delete update->value;
-      delete update;
-    }
-    delete updates;
-  }
-}
-*/
 }  // namespace csql

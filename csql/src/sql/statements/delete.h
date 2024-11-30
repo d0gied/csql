@@ -13,6 +13,6 @@ struct DeleteStatement : SQLStatement {
   std::shared_ptr<Expr> whereClause;
 };
 
-std::ostream &operator<<(std::ostream &stream, const DeleteStatement &select_statement);
+std::ostream &operator<<(std::ostream &stream, const DeleteStatement &delete_statement);
 
 }  // namespace csql

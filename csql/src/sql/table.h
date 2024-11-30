@@ -8,7 +8,7 @@
 
 namespace csql {
 
-struct DeleteStatement;
+struct SelectStatement;
 struct TableRef;
 
 // Possible table reference types.
