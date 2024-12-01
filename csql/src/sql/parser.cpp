@@ -268,15 +268,20 @@ std::shared_ptr<csql::SelectStatement> parseSelect(csql::SQLTokenizer &tokenizer
 
 std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
                                       std::shared_ptr<csql::SQLParserResult> result,
-                                      const std::string_view until = "", bool isTableRef = false) {
+                                      const std::string_view until = "", bool isTableRef = false,
+                                      bool inParen = false) {
   csql::Token token = tokenizer.nextToken();
   std::shared_ptr<csql::Expr> left;
 
   if (isTableRef) {
     if (token.value == "(") {
       left = csql::Expr::makeOpUnary(csql::OperatorType::kOpParenthesis,
-                                     parseExpr(tokenizer, result, "\\)", true));
+                                     parseExpr(tokenizer, result, "\\)", true, true));
     } else if (token.value == "SELECT") {
+      if (!inParen) {
+        result->setErrorDetails("Subquery must be in parenthesis", 0, 0, token);
+        return nullptr;
+      }
       left = csql::Expr::makeSelect(parseSelect(tokenizer, result, until));
     } else if (token.type == csql::TokenType::NAME) {
       left = csql::Expr::makeTableRef(token.value);
@@ -287,7 +292,7 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
   } else {
     if (token.value == "(") {
       left = csql::Expr::makeOpUnary(csql::OperatorType::kOpParenthesis,
-                                     parseExpr(tokenizer, result, "\\)"));
+                                     parseExpr(tokenizer, result, "\\)", false, true));
     } else if (token.value == "|") {
       left = csql::Expr::makeOpUnary(csql::OperatorType::kOpLength,
                                      parseExpr(tokenizer, result, "\\|"));
