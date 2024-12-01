@@ -20,7 +20,7 @@
     - [x] "*" for all columns
     - [x] Column names
     - [x] Column aliases
-    - [ ] Column expressions
+    - [x] Column expressions
   - [x] Table specification
     - [x] Table name
     - [x] Subquery
@@ -57,3 +57,5 @@
 - [x] Import data from a file
   - [x] Import from a CSV file
   - [ ] Import from a BINARY file
+
+Progress: 13/30 (43.33%)

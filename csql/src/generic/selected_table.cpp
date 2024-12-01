@@ -7,6 +7,7 @@
 #include "memory/dummy.h"
 #include "row.h"
 #include "sql/expr.h"
+#include "sql/statements/create.h"
 #include "sql/statements/select.h"
 #include "table.h"
 
@@ -77,7 +78,17 @@ std::shared_ptr<SelectedTable> SelectedTable::create(
         table_->columns_.push_back(column->clone(table_));
       }
     } else {
-      throw std::runtime_error("Unsupported expression type");
+      auto predictedType = table->predictType(columnExpr);
+      if (predictedType.data_type != DataType::UNKNOWN) {
+        if (columnExpr->hasAlias()) {
+          table_->columns_.push_back(
+              Column::create(columnExpr->alias, predictedType, table_, columnExpr));
+        } else {
+          throw std::runtime_error("Expression must have an alias");
+        }
+      } else {
+        throw std::runtime_error("Bad expression");
+      }
     }
   }
 
@@ -148,7 +159,11 @@ std::shared_ptr<Row> SelectedTableIterator::operator*() {
   auto row = *(*whereClauseIterator_);
   std::shared_ptr<Cell> cell = std::make_shared<Cell>();
   for (auto column : table_->getColumns()) {
-    cell->values.push_back(column->createValue(row->getColumnValue(column->refferedColumn())));
+    if (column->refferedExpr()) {  // expression
+      cell->values.push_back(column->createValue(row->evaluate(column->refferedExpr())));
+    } else {
+      cell->values.push_back(column->createValue(row->getColumnValue(column->refferedColumn())));
+    }
   }
   return std::make_shared<Row>(table_, cell);
 }

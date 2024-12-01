@@ -69,7 +69,7 @@ std::shared_ptr<ITable> Database::getTable(std::shared_ptr<Expr> tableRef) const
       if (tableRef->opType == kOpParenthesis) {
         return getTable(tableRef->expr);
       } else {
-        throw std::runtime_error("Unsupported expression type");
+        throw std::runtime_error("Unsupported expression type on getTable");
       }
     } break;
     default:

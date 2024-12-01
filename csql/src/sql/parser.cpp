@@ -409,10 +409,11 @@ std::shared_ptr<csql::SelectStatement> parseSelect(csql::SQLTokenizer &tokenizer
     if (!expr) {
       return nullptr;
     }
-    if (expr->type != csql::ExprType::kExprColumnRef && expr->type != csql::ExprType::kExprStar) {
-      result->setErrorDetails("Expected expression", 0, 0, token);
-      return nullptr;
-    }
+    // if (expr->type != csql::ExprType::kExprColumnRef && expr->type != csql::ExprType::kExprStar)
+    // {
+    //   result->setErrorDetails("Expected expression", 0, 0, token);
+    //   return nullptr;
+    // }
     token = tokenizer.nextToken();
     if (token.value == "AS") {
       token = tokenizer.nextToken();

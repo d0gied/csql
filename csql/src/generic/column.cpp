@@ -16,6 +16,23 @@ std::shared_ptr<Column> Column::create(std::shared_ptr<ColumnDefinition> columnD
   column->is_key_ = columnDefinition->column_constraints->count(ConstraintType::Key) > 0;
   column->is_unique_ = columnDefinition->column_constraints->count(ConstraintType::Unique) > 0;
   column->default_value_ = columnDefinition->default_value;
+  return column;
+}
+
+std::shared_ptr<Column> Column::create(const std::string& name, const ColumnType& type,
+                                       std::shared_ptr<ITable> table,
+                                       std::shared_ptr<Expr> refExpr) {
+  std::shared_ptr<Column> column = std::make_shared<Column>();
+  column->name_ = name;
+  column->column_type_ = type;
+  column->reffered_expr_ = refExpr;
+  column->table_ = table;
+
+  column->nullable_ = true;
+  column->is_autoincrement_ = false;
+  column->is_key_ = false;
+  column->is_unique_ = false;
+  column->default_value_ = nullptr;
 
   return column;
 }
@@ -93,6 +110,10 @@ void* Column::createValue(std::shared_ptr<Expr> value) const {
 
 std::shared_ptr<Column> Column::refferedColumn() const {
   return reffered_column_;
+}
+
+std::shared_ptr<Expr> Column::refferedExpr() const {
+  return reffered_expr_;
 }
 
 std::shared_ptr<Column> Column::clone(std::shared_ptr<ITable> table, const std::string& name) {

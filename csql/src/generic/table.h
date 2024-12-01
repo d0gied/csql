@@ -10,6 +10,7 @@
 #include "../sql/statements/insert.h"
 #include "column.h"
 #include "row.h"
+#include "sql/column_type.h"
 #include "sql/statements/delete.h"
 #include "sql/statements/select.h"
 #include "sql/statements/update.h"
@@ -84,14 +85,18 @@ class ITable {
   virtual std::shared_ptr<TableIterator> getIterator() = 0;
   virtual const std::string& getName() const = 0;
   virtual const std::vector<std::shared_ptr<Column>>& getColumns() = 0;
-  virtual std::shared_ptr<Column> getColumn(std::shared_ptr<Expr> columnExpr) = 0;
+  virtual std::shared_ptr<Column> getColumn(std::shared_ptr<Expr> columnExpr) {
+    return nullptr;
+  };
+
+  virtual ColumnType predictType(std::shared_ptr<Expr> expr);
 
   // virtual std::shared_ptr<VirtualTable> select(std::shared_ptr<Expr> whereClause) = 0;
   // virtual std::shared_ptr<VirtualTable> join(std::shared_ptr<ITable> table,
   //                                            std::shared_ptr<Expr> onClause) = 0;
 
   virtual void exportToCSV(const std::string& filename);
-};
+};  // namespace storage
 
 class StorageTable : public ITable, public std::enable_shared_from_this<StorageTable> {
  public:
