@@ -27,8 +27,8 @@ std::shared_ptr<StorageTable> StorageTable::create(
 std::shared_ptr<StorageTable> StorageTable::create(std::shared_ptr<CreateStatement> createStatement,
                                                    std::shared_ptr<ITable> refTable) {
   std::shared_ptr<StorageTable> table = std::make_shared<StorageTable>();
-  for (auto column : table->getColumns()) {
-    table->addColumn(column->clone(refTable));
+  for (auto column : refTable->getColumns()) {
+    table->addColumn(column->clone(table));
   }
   table->name_ = createStatement->tableName;
   auto it = refTable->getIterator();
