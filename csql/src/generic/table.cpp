@@ -67,6 +67,10 @@ ColumnType ITable::predictType(std::shared_ptr<Expr> expr) {
       auto right = predictType(expr->expr2);
       if (left.data_type == DataType::STRING && right.data_type == DataType::STRING) {
         return ColumnType(DataType::STRING, left.length + right.length);
+      } else if (left.data_type == DataType::INT32 && right.data_type == DataType::INT32) {
+        return ColumnType(DataType::INT32);
+      } else if (left.data_type == DataType::BYTES && right.data_type == DataType::BYTES) {
+        return ColumnType(DataType::BYTES, left.length + right.length);
       } else {
         throw std::runtime_error("Invalid operation");
       }

@@ -81,7 +81,7 @@ std::shared_ptr<csql::Expr> applyUnaryOpToLiteral(csql::OperatorType opType,
       return csql::Expr::makeLiteral((int)operand->name.size());
     if (opType == csql::OperatorType::kOpIsNull) return csql::Expr::makeLiteral(false);
   }
-  throw std::runtime_error("Invalid operation");
+  throw std::runtime_error("Invalid operation: " + std::to_string(opType));
 }
 
 std::shared_ptr<csql::Expr> applyBinaryOpToLiterals(std::shared_ptr<csql::Expr> left,
@@ -183,7 +183,7 @@ std::shared_ptr<csql::Expr> applyBinaryOpToLiterals(std::shared_ptr<csql::Expr> 
       return csql::Expr::makeLiteral(!isBytesLess(left->name, right->name));
     throw std::runtime_error("Invalid operation on bytes: " + std::to_string(opType));
   }
-  throw std::runtime_error("Invalid operation");
+  throw std::runtime_error("Invalid operation on literals: " + std::to_string(opType));
 }
 
 }  // namespace

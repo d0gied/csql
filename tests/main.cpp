@@ -27,7 +27,8 @@ int main() {
   // }
 
   db.execute(
-      "CREATE TABLE test AS (SELECT login as username, |login| AS login_len FROM users WHERE "
+      "CREATE TABLE test AS (SELECT login as username, (|login| + 5)  AS login_len FROM users "
+      "WHERE "
       "is_admin = "
       "false)");
 
