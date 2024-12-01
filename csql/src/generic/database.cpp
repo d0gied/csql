@@ -21,29 +21,26 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
   std::shared_ptr<SQLParserResult> result = std::make_shared<SQLParserResult>();
   SQLParser::parse(sql, result);
   if (!result->isValid()) {
-    std::cout << "Parsing failed: " << result->errorMsg() << std::endl;
-    return nullptr;
+    throw std::runtime_error(result->errorMsg());
   }
-  std::cout << *result;
 
-  if (result->isValid()) {
-    for (auto stmt : result->getStatements()) {
-      if (stmt->is(kStmtCreate)) {
-        create(std::dynamic_pointer_cast<CreateStatement>(stmt));
-        return nullptr;
-      } else if (stmt->is(kStmtInsert)) {
-        insert(std::dynamic_pointer_cast<InsertStatement>(stmt));
-        return nullptr;
-      } else if (stmt->is(kStmtSelect)) {
-        return select(std::dynamic_pointer_cast<SelectStatement>(stmt))->getIterator();
-      } else if (stmt->is(kStmtDelete)) {
-        delete_(std::dynamic_pointer_cast<DeleteStatement>(stmt));
-        return nullptr;
-        // } else if (stmt->is(kStmtUpdate)) {
-        //   return update(std::dynamic_pointer_cast<UpdateStatement>(stmt));
-      } else {
-        std::cout << "Unknown statement" << std::endl;
-      }
+  std::cout << *result;
+  for (auto stmt : result->getStatements()) {
+    if (stmt->is(kStmtCreate)) {
+      create(std::dynamic_pointer_cast<CreateStatement>(stmt));
+      return nullptr;
+    } else if (stmt->is(kStmtInsert)) {
+      insert(std::dynamic_pointer_cast<InsertStatement>(stmt));
+      return nullptr;
+    } else if (stmt->is(kStmtSelect)) {
+      return select(std::dynamic_pointer_cast<SelectStatement>(stmt))->getIterator();
+    } else if (stmt->is(kStmtDelete)) {
+      delete_(std::dynamic_pointer_cast<DeleteStatement>(stmt));
+      return nullptr;
+      // } else if (stmt->is(kStmtUpdate)) {
+      //   return update(std::dynamic_pointer_cast<UpdateStatement>(stmt));
+    } else {
+      std::cout << "Unknown statement" << std::endl;
     }
   }
 

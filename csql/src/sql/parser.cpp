@@ -222,7 +222,6 @@ bool parseInsert(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
   insertStatement->columnValues = columnValues;
 
   result->addStatement(insertStatement);
-  result->setIsValid(true);
   return true;
 }
 
@@ -324,7 +323,7 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
       return nullptr;
     }
   }
-  if (until.empty()) {
+  if (until.empty() || !result->isValid()) {
     return left;
   }
 
@@ -409,11 +408,14 @@ std::shared_ptr<csql::SelectStatement> parseSelect(csql::SQLTokenizer &tokenizer
     if (!expr) {
       return nullptr;
     }
-    // if (expr->type != csql::ExprType::kExprColumnRef && expr->type != csql::ExprType::kExprStar)
-    // {
-    //   result->setErrorDetails("Expected expression", 0, 0, token);
-    //   return nullptr;
-    // }
+    if (expr->type != csql::ExprType::kExprColumnRef && expr->type != csql::ExprType::kExprStar) {
+      if (expr->type != csql::ExprType::kExprOperator ||
+          expr->opType != csql::OperatorType::kOpParenthesis) {
+        result->setErrorDetails("Column expression must be in parenthesis: " + expr->toString(), 0,
+                                0, token);
+        return nullptr;
+      }
+    }
     token = tokenizer.nextToken();
     if (token.value == "AS") {
       token = tokenizer.nextToken();
@@ -476,7 +478,6 @@ bool parseCreateTable(csql::SQLTokenizer &tokenizer,
       return false;
     }
     result->addStatement(createStatement);
-    result->setIsValid(true);
     return true;
   }
 
@@ -504,7 +505,6 @@ bool parseCreateTable(csql::SQLTokenizer &tokenizer,
   }
 
   result->addStatement(createStatement);
-  result->setIsValid(true);
   return true;
 }
 
@@ -552,7 +552,6 @@ bool parseDelete(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
     return false;
   }
   result->addStatement(deleteStatement);
-  result->setIsValid(true);
 
   return true;
 }
@@ -640,9 +639,8 @@ bool SQLParser::parse(const std::string &sql, std::shared_ptr<SQLParserResult> r
     return parseInsert(tokenizer, result);
   } else if (token.value == "SELECT") {
     auto selectStatement = parseSelect(tokenizer, result);
-    if (selectStatement) {
+    if (selectStatement && result->isValid()) {
       result->addStatement(selectStatement);
-      result->setIsValid(true);
       return true;
     }
     return false;

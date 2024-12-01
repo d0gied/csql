@@ -12,10 +12,10 @@
 
 namespace csql {
 
-SQLParserResult::SQLParserResult() : isValid_(false), errorMsg_("") {}
+SQLParserResult::SQLParserResult() : isValid_(true), errorMsg_("") {}
 
 SQLParserResult::SQLParserResult(std::shared_ptr<SQLStatement> stmt)
-    : isValid_(false), errorMsg_("") {
+    : isValid_(true), errorMsg_("") {
   addStatement(stmt);
 }
 
