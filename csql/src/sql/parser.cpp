@@ -268,43 +268,56 @@ std::shared_ptr<csql::SelectStatement> parseSelect(csql::SQLTokenizer &tokenizer
 
 std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
                                       std::shared_ptr<csql::SQLParserResult> result,
-                                      const std::string_view until = "") {
+                                      const std::string_view until = "", bool isTableRef = false) {
   csql::Token token = tokenizer.nextToken();
   std::shared_ptr<csql::Expr> left;
 
-  if (token.value == "SELECT") {
-    return csql::Expr::makeSelect(parseSelect(tokenizer, result, until));
-  } else if (token.value == "(") {
-    left = csql::Expr::makeOpUnary(csql::OperatorType::kOpParenthesis,
-                                   parseExpr(tokenizer, result, "\\)"));
-  } else if (token.value == "|") {
-    left =
-        csql::Expr::makeOpUnary(csql::OperatorType::kOpLength, parseExpr(tokenizer, result, "\\|"));
-  } else if (token.value == "NOT") {
-    left = csql::Expr::makeOpUnary(csql::OperatorType::kOpNot, parseExpr(tokenizer, result));
-  } else if (token.value == "-") {
-    left = csql::Expr::makeOpUnary(csql::OperatorType::kOpUnaryMinus, parseExpr(tokenizer, result));
-  } else if (token.value == "~") {
-    left = csql::Expr::makeOpUnary(csql::OperatorType::kOpBitNot, parseExpr(tokenizer, result));
-  } else if (token.type == csql::TokenType::INTEGER) {
-    left = csql::Expr::makeLiteral(std::stoi(token.value));
-  } else if (token.type == csql::TokenType::STRING) {
-    left = csql::Expr::makeLiteral(token.value);
-  } else if (token.type == csql::TokenType::HEX) {
-    left = csql::Expr::makeLiteral(token.value);
-  } else if (token.value == "TRUE") {
-    left = csql::Expr::makeLiteral(true);
-  } else if (token.value == "FALSE") {
-    left = csql::Expr::makeLiteral(false);
-  } else if (token.value == "NULL") {
-    left = csql::Expr::makeNullLiteral();
-  } else if (token.value == "*") {
-    left = csql::Expr::makeStar();
-  } else if (token.type == csql::TokenType::NAME || token.type == csql::TokenType::COLUMN_NAME) {
-    left = csql::Expr::makeColumnRef(token.value);
+  if (isTableRef) {
+    if (token.value == "(") {
+      left = csql::Expr::makeOpUnary(csql::OperatorType::kOpParenthesis,
+                                     parseExpr(tokenizer, result, "\\)", true));
+    } else if (token.value == "SELECT") {
+      left = csql::Expr::makeSelect(parseSelect(tokenizer, result, until));
+    } else if (token.type == csql::TokenType::NAME) {
+      left = csql::Expr::makeTableRef(token.value);
+    } else {
+      result->setErrorDetails("Expected table reference", 0, 0, token);
+      return nullptr;
+    }
   } else {
-    result->setErrorDetails("Expected expression", 0, 0, token);
-    return nullptr;
+    if (token.value == "(") {
+      left = csql::Expr::makeOpUnary(csql::OperatorType::kOpParenthesis,
+                                     parseExpr(tokenizer, result, "\\)"));
+    } else if (token.value == "|") {
+      left = csql::Expr::makeOpUnary(csql::OperatorType::kOpLength,
+                                     parseExpr(tokenizer, result, "\\|"));
+    } else if (token.value == "NOT") {
+      left = csql::Expr::makeOpUnary(csql::OperatorType::kOpNot, parseExpr(tokenizer, result));
+    } else if (token.value == "-") {
+      left =
+          csql::Expr::makeOpUnary(csql::OperatorType::kOpUnaryMinus, parseExpr(tokenizer, result));
+    } else if (token.value == "~") {
+      left = csql::Expr::makeOpUnary(csql::OperatorType::kOpBitNot, parseExpr(tokenizer, result));
+    } else if (token.type == csql::TokenType::INTEGER) {
+      left = csql::Expr::makeLiteral(std::stoi(token.value));
+    } else if (token.type == csql::TokenType::STRING) {
+      left = csql::Expr::makeLiteral(token.value);
+    } else if (token.type == csql::TokenType::HEX) {
+      left = csql::Expr::makeLiteral(token.value);
+    } else if (token.value == "TRUE") {
+      left = csql::Expr::makeLiteral(true);
+    } else if (token.value == "FALSE") {
+      left = csql::Expr::makeLiteral(false);
+    } else if (token.value == "NULL") {
+      left = csql::Expr::makeNullLiteral();
+    } else if (token.value == "*") {
+      left = csql::Expr::makeStar();
+    } else if (token.type == csql::TokenType::NAME || token.type == csql::TokenType::COLUMN_NAME) {
+      left = csql::Expr::makeColumnRef(token.value);
+    } else {
+      result->setErrorDetails("Expected expression", 0, 0, token);
+      return nullptr;
+    }
   }
   if (until.empty()) {
     return left;
@@ -312,7 +325,7 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
 
   token = tokenizer.nextToken();
   boost::regex re(until.data());
-  while (!boost::regex_match(token.value, re) && token.type != csql::TokenType::TERMINAL) {
+  while (token.type != csql::TokenType::TERMINAL && !boost::regex_match(token.value, re)) {
     if (token.type != csql::TokenType::OPERATOR && token.value != "OR" && token.value != "AND" &&
         token.value != "IS NULL" && token.value != "IS NOT NULL") {
       result->setErrorDetails("Expected operator", 0, 0, token);
@@ -320,39 +333,44 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
     }
 
     csql::OperatorType op;
-    if (token.value == "OR") {
-      op = csql::OperatorType::kOpOr;
-    } else if (token.value == "AND") {
-      op = csql::OperatorType::kOpAnd;
-    } else if (token.value == "+") {
-      op = csql::OperatorType::kOpPlus;
-    } else if (token.value == "-") {
-      op = csql::OperatorType::kOpMinus;
-    } else if (token.value == "*") {
-      op = csql::OperatorType::kOpAsterisk;
-    } else if (token.value == "/") {
-      op = csql::OperatorType::kOpSlash;
-    } else if (token.value == "%") {
-      op = csql::OperatorType::kOpPercentage;
-    } else if (token.value == "=") {
-      op = csql::OperatorType::kOpEquals;
-    } else if (token.value == "!=") {
-      op = csql::OperatorType::kOpNotEquals;
-    } else if (token.value == "<") {
-      op = csql::OperatorType::kOpLess;
-    } else if (token.value == "<=") {
-      op = csql::OperatorType::kOpLessEq;
-    } else if (token.value == ">") {
-      op = csql::OperatorType::kOpGreater;
-    } else if (token.value == ">=") {
-      op = csql::OperatorType::kOpGreaterEq;
-    } else if (token.value == "IN") {
-      op = csql::OperatorType::kOpIn;
-    } else if (token.value == "IS NULL" || token.value == "IS NOT NULL") {
-      op = csql::OperatorType::kOpIsNull;
-    } else {
-      result->setErrorDetails("Unknown operator", 0, 0, token);
+    if (isTableRef) {
+      result->setErrorDetails("Table reference cannot have operators", 0, 0, token);
       return nullptr;
+    } else {
+      if (token.value == "OR") {
+        op = csql::OperatorType::kOpOr;
+      } else if (token.value == "AND") {
+        op = csql::OperatorType::kOpAnd;
+      } else if (token.value == "+") {
+        op = csql::OperatorType::kOpPlus;
+      } else if (token.value == "-") {
+        op = csql::OperatorType::kOpMinus;
+      } else if (token.value == "*") {
+        op = csql::OperatorType::kOpAsterisk;
+      } else if (token.value == "/") {
+        op = csql::OperatorType::kOpSlash;
+      } else if (token.value == "%") {
+        op = csql::OperatorType::kOpPercentage;
+      } else if (token.value == "=") {
+        op = csql::OperatorType::kOpEquals;
+      } else if (token.value == "!=") {
+        op = csql::OperatorType::kOpNotEquals;
+      } else if (token.value == "<") {
+        op = csql::OperatorType::kOpLess;
+      } else if (token.value == "<=") {
+        op = csql::OperatorType::kOpLessEq;
+      } else if (token.value == ">") {
+        op = csql::OperatorType::kOpGreater;
+      } else if (token.value == ">=") {
+        op = csql::OperatorType::kOpGreaterEq;
+      } else if (token.value == "IN") {
+        op = csql::OperatorType::kOpIn;
+      } else if (token.value == "IS NULL" || token.value == "IS NOT NULL") {
+        op = csql::OperatorType::kOpIsNull;
+      } else {
+        result->setErrorDetails("Unknown operator", 0, 0, token);
+        return nullptr;
+      }
     }
 
     if (op == csql::OperatorType::kOpIn) {
@@ -413,15 +431,9 @@ std::shared_ptr<csql::SelectStatement> parseSelect(csql::SQLTokenizer &tokenizer
     return nullptr;
   }
 
-  token = tokenizer.nextToken();
-  if (token.type != csql::TokenType::NAME) {
-    result->setErrorDetails("Expected table name", 0, 0, token);
-    return nullptr;
-  }
-
   std::shared_ptr<csql::SelectStatement> selectStatement =
       std::make_shared<csql::SelectStatement>();
-  selectStatement->fromSource = csql::Expr::makeTableRef(token.value);
+  selectStatement->fromSource = parseExpr(tokenizer, result, "", true);
   selectStatement->selectList = selectList;
 
   token = tokenizer.nextToken();
@@ -453,7 +465,7 @@ bool parseCreateTable(csql::SQLTokenizer &tokenizer,
     std::shared_ptr<csql::CreateStatement> createStatement =
         std::make_shared<csql::CreateStatement>(csql::CreateType::kCreateTableAsSelect);
     createStatement->tableName = tableName;
-    createStatement->sourceRef = parseExpr(tokenizer, result, ";");
+    createStatement->sourceRef = parseExpr(tokenizer, result, ";", true);
     if (!createStatement->sourceRef) {
       return false;
     }

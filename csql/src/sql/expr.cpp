@@ -400,6 +400,9 @@ std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
     default:
       stream << "UNKNOWN_EXPR";
   }
+  if (expr.alias != "") {
+    stream << " AS " << expr.alias;
+  }
   return stream;
 }
 

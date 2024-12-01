@@ -55,6 +55,9 @@ SQLTokenizer::SQLTokenizer(const std::string &sql) : sql_(sql) {
 }
 
 const Token SQLTokenizer::get() {
+  if (next == boost::sregex_token_iterator()) {
+    return Token{TokenType::TERMINAL, ""};
+  }
   std::string value = *next;
   TokenType type = TokenType::TERMINAL;
 
@@ -94,7 +97,7 @@ const Token SQLTokenizer::get() {
 
 const Token SQLTokenizer::nextToken() {
   auto token = get();
-  ++next;
+  if (next != boost::sregex_token_iterator()) ++next;
   return token;
 }
 
