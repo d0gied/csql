@@ -99,6 +99,8 @@ class StorageTable : public ITable, public std::enable_shared_from_this<StorageT
   virtual ~StorageTable();
 
   static std::shared_ptr<StorageTable> create(std::shared_ptr<CreateStatement> createStatement);
+  static std::shared_ptr<StorageTable> create(std::shared_ptr<CreateStatement> createStatement,
+                                              std::shared_ptr<ITable> refTable);
 
   void insert(std::shared_ptr<InsertStatement> insertStatement) override;
   void delete_(std::shared_ptr<DeleteStatement> deleteStatement) override;

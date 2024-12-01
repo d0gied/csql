@@ -60,6 +60,10 @@ std::ostream& operator<<(std::ostream& stream, const CreateStatement& create) {
     case CreateType::kCreateIndex:
       stream << "INDEX ";
       break;
+    case CreateType::kCreateTableAsSelect:
+      stream << "TABLE ";
+      stream << create.tableName << " AS " << *create.sourceRef;
+      break;
   }
   return stream;
 }

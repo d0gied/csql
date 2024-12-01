@@ -45,7 +45,7 @@ struct ColumnDefinition : TableElement {
   std::shared_ptr<Expr> default_value;
 };
 
-enum CreateType { kCreateTable, kCreateIndex };
+enum CreateType { kCreateTable, kCreateIndex, kCreateTableAsSelect };
 
 struct CreateStatement : SQLStatement {
   CreateStatement(CreateType type);

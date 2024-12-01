@@ -24,6 +24,21 @@ std::shared_ptr<StorageTable> StorageTable::create(
   return table;
 }
 
+std::shared_ptr<StorageTable> StorageTable::create(std::shared_ptr<CreateStatement> createStatement,
+                                                   std::shared_ptr<ITable> refTable) {
+  std::shared_ptr<StorageTable> table = std::make_shared<StorageTable>();
+  for (auto column : table->getColumns()) {
+    table->addColumn(column->clone(refTable));
+  }
+  table->name_ = createStatement->tableName;
+  auto it = refTable->getIterator();
+  while (it->hasValue()) {
+    table->storage_->insert((*(*it))->cell_);
+    ++(*it);
+  }
+  return table;
+}
+
 void StorageTable::addColumn(std::shared_ptr<Column> column) {
   columns_.push_back(column);
   column->table_ = shared_from_this();

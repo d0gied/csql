@@ -113,59 +113,6 @@ std::shared_ptr<csql::ColumnDefinition> parseColumnDefinition(
       default_value);
 }
 
-bool parseCreateTable(csql::SQLTokenizer &tokenizer,
-                      std::shared_ptr<csql::SQLParserResult> result) {
-  csql::Token token = tokenizer.nextToken();
-  if (token.type != csql::TokenType::NAME) {
-    result->setErrorDetails("Expected table name", 0, 0, token);
-    return false;
-  }
-  std::string tableName = token.value;
-
-  token = tokenizer.nextToken();
-  if (token.value != "(") {
-    result->setErrorDetails("Expected (", 0, 0, token);
-    return false;
-  }
-
-  std::shared_ptr<csql::CreateStatement> createStatement =
-      std::make_shared<csql::CreateStatement>(csql::CreateType::kCreateTable);
-  createStatement->tableName = tableName;
-  createStatement->columns =
-      std::make_shared<std::vector<std::shared_ptr<csql::ColumnDefinition>>>();
-
-  bool hasComma = false;
-  bool hasParen = false;
-
-  while (!hasParen) {
-    std::shared_ptr<csql::ColumnDefinition> column =
-        parseColumnDefinition(tokenizer, result, hasComma, hasParen);
-    if (!column) {
-      return false;
-    }
-    createStatement->columns->push_back(column);
-  }
-
-  result->addStatement(createStatement);
-  result->setIsValid(true);
-  return true;
-}
-
-bool parseCreate(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
-  csql::Token token = tokenizer.nextToken();
-  if (token.value == "TABLE") {
-    return parseCreateTable(tokenizer, result);
-  } else if (token.value == "ORDERED INDEX") {
-    result->setErrorDetails("Ordered indexes are not supported", 0, 0, token);
-    return false;
-  } else if (token.value == "UNORDERED INDEX") {
-    result->setErrorDetails("Unordered indexes are not supported", 0, 0, token);
-    return false;
-  }
-  result->setErrorDetails("Expected TABLE, ORDERED INDEX or UNORDERED INDEX", 0, 0, token);
-  return false;
-}
-
 std::shared_ptr<csql::ColumnValueDefinition> parseColumnValueDefinition(
     csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result, bool &hasComma,
     bool &hasParen) {
@@ -315,15 +262,21 @@ std::shared_ptr<csql::Expr> applyOpOnSameLevel(
   }
 }
 
+std::shared_ptr<csql::SelectStatement> parseSelect(csql::SQLTokenizer &tokenizer,
+                                                   std::shared_ptr<csql::SQLParserResult> result,
+                                                   const std::string_view until = ";");
+
 std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
                                       std::shared_ptr<csql::SQLParserResult> result,
                                       const std::string_view until = "") {
   csql::Token token = tokenizer.nextToken();
   std::shared_ptr<csql::Expr> left;
 
-  if (token.value == "(") {
+  if (token.value == "SELECT") {
+    return csql::Expr::makeSelect(parseSelect(tokenizer, result, until));
+  } else if (token.value == "(") {
     left = csql::Expr::makeOpUnary(csql::OperatorType::kOpParenthesis,
-                                   parseExpr(tokenizer, result, ")"));
+                                   parseExpr(tokenizer, result, "\\)"));
   } else if (token.value == "|") {
     left =
         csql::Expr::makeOpUnary(csql::OperatorType::kOpLength, parseExpr(tokenizer, result, "\\|"));
@@ -421,7 +374,9 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
   return left;
 }
 
-bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
+std::shared_ptr<csql::SelectStatement> parseSelect(csql::SQLTokenizer &tokenizer,
+                                                   std::shared_ptr<csql::SQLParserResult> result,
+                                                   const std::string_view until) {
   csql::Token token = tokenizer.get();
   std::shared_ptr<std::vector<std::shared_ptr<csql::Expr>>> selectList =
       std::make_shared<std::vector<std::shared_ptr<csql::Expr>>>();
@@ -429,35 +384,39 @@ bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
   while (token.value != "FROM") {
     std::shared_ptr<csql::Expr> expr = parseExpr(tokenizer, result);
     if (!expr) {
-      return false;
+      return nullptr;
     }
-    if (expr->type == csql::ExprType::kExprStar) {
-      result->setErrorDetails("Cannot use * in SELECT", 0, 0, token);
-      return false;
-    } else if (expr->type != csql::ExprType::kExprColumnRef) {
+    if (expr->type != csql::ExprType::kExprColumnRef && expr->type != csql::ExprType::kExprStar) {
       result->setErrorDetails("Expected expression", 0, 0, token);
-      return false;
+      return nullptr;
     }
-    selectList->push_back(expr);
-    token = tokenizer.get();
-    if (token.value == ",") {
+    token = tokenizer.nextToken();
+    if (token.value == "AS") {
       token = tokenizer.nextToken();
-    } else if (token.value != "FROM") {
+      if (token.type != csql::TokenType::NAME) {
+        result->setErrorDetails("Expected alias name", 0, 0, token);
+        return nullptr;
+      }
+      expr->alias = token.value;
+      token = tokenizer.nextToken();
+    }
+
+    selectList->push_back(expr);
+
+    if (token.value != "FROM" && token.value != ",") {
       result->setErrorDetails("Expected , or FROM", 0, 0, token);
-      return false;
+      return nullptr;
     }
   }
-
-  token = tokenizer.nextToken();
-  if (token.value != "FROM") {
-    result->setErrorDetails("Expected FROM", 0, 0, token);
-    return false;
+  if (selectList->empty()) {
+    result->setErrorDetails("Expected at least one column", 0, 0, token);
+    return nullptr;
   }
 
   token = tokenizer.nextToken();
   if (token.type != csql::TokenType::NAME) {
     result->setErrorDetails("Expected table name", 0, 0, token);
-    return false;
+    return nullptr;
   }
 
   std::shared_ptr<csql::SelectStatement> selectStatement =
@@ -468,19 +427,82 @@ bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
   token = tokenizer.nextToken();
   if (token.value != "WHERE") {
     result->setErrorDetails("Expected WHERE", 0, 0, token);
-    return false;
+    return nullptr;
   }
 
-  selectStatement->whereClause = parseExpr(tokenizer, result, ";");
+  selectStatement->whereClause = parseExpr(tokenizer, result, until);
 
   if (!selectStatement->whereClause) {
+    return nullptr;
+  }
+
+  return selectStatement;
+}
+
+bool parseCreateTable(csql::SQLTokenizer &tokenizer,
+                      std::shared_ptr<csql::SQLParserResult> result) {
+  csql::Token token = tokenizer.nextToken();
+  if (token.type != csql::TokenType::NAME) {
+    result->setErrorDetails("Expected table name", 0, 0, token);
+    return false;
+  }
+  std::string tableName = token.value;
+
+  token = tokenizer.nextToken();
+  if (token.value == "AS") {
+    std::shared_ptr<csql::CreateStatement> createStatement =
+        std::make_shared<csql::CreateStatement>(csql::CreateType::kCreateTableAsSelect);
+    createStatement->tableName = tableName;
+    createStatement->sourceRef = parseExpr(tokenizer, result, ";");
+    if (!createStatement->sourceRef) {
+      return false;
+    }
+    result->addStatement(createStatement);
+    result->setIsValid(true);
+    return true;
+  }
+
+  if (token.value != "(") {
+    result->setErrorDetails("Expected (", 0, 0, token);
     return false;
   }
 
-  result->addStatement(selectStatement);
-  result->setIsValid(true);
+  std::shared_ptr<csql::CreateStatement> createStatement =
+      std::make_shared<csql::CreateStatement>(csql::CreateType::kCreateTable);
+  createStatement->tableName = tableName;
+  createStatement->columns =
+      std::make_shared<std::vector<std::shared_ptr<csql::ColumnDefinition>>>();
 
+  bool hasComma = false;
+  bool hasParen = false;
+
+  while (!hasParen) {
+    std::shared_ptr<csql::ColumnDefinition> column =
+        parseColumnDefinition(tokenizer, result, hasComma, hasParen);
+    if (!column) {
+      return false;
+    }
+    createStatement->columns->push_back(column);
+  }
+
+  result->addStatement(createStatement);
+  result->setIsValid(true);
   return true;
+}
+
+bool parseCreate(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
+  csql::Token token = tokenizer.nextToken();
+  if (token.value == "TABLE") {
+    return parseCreateTable(tokenizer, result);
+  } else if (token.value == "ORDERED INDEX") {
+    result->setErrorDetails("Ordered indexes are not supported", 0, 0, token);
+    return false;
+  } else if (token.value == "UNORDERED INDEX") {
+    result->setErrorDetails("Unordered indexes are not supported", 0, 0, token);
+    return false;
+  }
+  result->setErrorDetails("Expected TABLE, ORDERED INDEX or UNORDERED INDEX", 0, 0, token);
+  return false;
 }
 
 bool parseDelete(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
@@ -599,7 +621,13 @@ bool SQLParser::parse(const std::string &sql, std::shared_ptr<SQLParserResult> r
   } else if (token.value == "INSERT") {
     return parseInsert(tokenizer, result);
   } else if (token.value == "SELECT") {
-    return parseSelect(tokenizer, result);
+    auto selectStatement = parseSelect(tokenizer, result);
+    if (selectStatement) {
+      result->addStatement(selectStatement);
+      result->setIsValid(true);
+      return true;
+    }
+    return false;
   } else if (token.value == "DELETE") {
     return parseDelete(tokenizer, result);
   }

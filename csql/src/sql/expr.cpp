@@ -392,7 +392,7 @@ std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
 
     } break;
     case kExprSelect:
-      stream << "SELECT";
+      stream << *expr.select;
       break;
     case kExprTableRef:
       stream << expr.name;

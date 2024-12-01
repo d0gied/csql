@@ -23,6 +23,15 @@ void SQLParserResult::addStatement(std::shared_ptr<SQLStatement> stmt) {
   statements_.push_back(stmt);
 }
 
+std::shared_ptr<SQLStatement> SQLParserResult::popStatement() {
+  if (statements_.empty()) {
+    return nullptr;
+  }
+  auto stmt = statements_.back();
+  statements_.pop_back();
+  return stmt;
+}
+
 std::shared_ptr<SQLStatement> SQLParserResult::getStatement(size_t index) const {
   return statements_[index];
 }

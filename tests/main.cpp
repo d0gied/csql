@@ -13,22 +13,25 @@ int main() {
   db.execute(
       "insert (login=\"admin\", password_hash=0x0011223344556677, is_admin=true) to "
       "users");
-  db.execute(
-      "insert (login=\"user\", password_hash=0x0011223344556677) to "
-      "users");
-  db.execute(
-      "insert (login=\"user1\", password_hash=0x2233445566778899) to "
-      "users");
-
-  db.execute("DELETE FROM users WHERE login = \"admin\"");
-  auto iterator = db.execute("SELECT login FROM users WHERE |login| % 2 = 1");
+  for (int i = 0; i < 10; ++i) {
+    db.execute("insert (login=\"user" + std::to_string(i) +
+               "\", password_hash=0x0011223344556677, "
+               "is_admin=false) to users");
+  }
+  db.execute("DELETE FROM users WHERE login = \"user2\"");
+  auto iterator = db.execute("SELECT login AS username FROM users WHERE |login| % 2 = 1");
   while (iterator->hasValue()) {
     auto row = *(*iterator);
     ++(*iterator);
-    std::cout << "Login: " << row->get<std::string>("login") << std::endl;
+    std::cout << "Login: " << row->get<std::string>("username") << std::endl;
   }
 
+  db.execute(
+      "CREATE TABLE test AS (SELECT login as username, password_hash FROM users WHERE is_admin = "
+      "false)");
+
   db.exportTableToCSV("users", "users.csv");
+  db.exportTableToCSV("test", "test.csv");
 
   return 0;
 }

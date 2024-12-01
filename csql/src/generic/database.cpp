@@ -20,6 +20,10 @@ namespace storage {
 std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
   std::shared_ptr<SQLParserResult> result = std::make_shared<SQLParserResult>();
   SQLParser::parse(sql, result);
+  if (!result->isValid()) {
+    std::cout << "Parsing failed: " << result->errorMsg() << std::endl;
+    return nullptr;
+  }
   std::cout << *result << std::endl;
 
   if (result->isValid()) {
@@ -41,8 +45,6 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
         std::cout << "Unknown statement" << std::endl;
       }
     }
-  } else {
-    std::cout << "Parsing failed: " << result->errorMsg() << std::endl;
   }
 
   return nullptr;
@@ -60,7 +62,15 @@ std::shared_ptr<ITable> Database::getTable(std::shared_ptr<Expr> tableRef) const
       return select(tableRef->select);
     } break;
     case kExprJoin: {
+      throw std::runtime_error("Join not supported");
       return nullptr;
+    } break;
+    case kExprOperator: {
+      if (tableRef->opType == kOpParenthesis) {
+        return getTable(tableRef->expr);
+      } else {
+        throw std::runtime_error("Unsupported expression type");
+      }
     } break;
     default:
       throw std::runtime_error("Failed to get table");
@@ -68,8 +78,21 @@ std::shared_ptr<ITable> Database::getTable(std::shared_ptr<Expr> tableRef) const
 }
 
 std::shared_ptr<ITable> Database::create(std::shared_ptr<CreateStatement> createStatement) {
-  tables_[createStatement->tableName] = StorageTable::create(createStatement);
-  return tables_[createStatement->tableName];
+  if (tables_.count(createStatement->tableName) > 0) {
+    throw std::runtime_error("Table already exists: " + createStatement->tableName);
+  }
+  if (createStatement->type == CreateType::kCreateTable) {
+    if (createStatement->columns->empty()) {
+      throw std::runtime_error("No columns specified");
+    }
+    tables_[createStatement->tableName] = StorageTable::create(createStatement);
+    return tables_[createStatement->tableName];
+  } else if (createStatement->type == CreateType::kCreateTableAsSelect) {
+    return tables_[createStatement->tableName] =
+               StorageTable::create(createStatement, getTable(createStatement->sourceRef));
+  } else {
+    throw std::runtime_error("Unsupported create type");
+  }
 }
 
 std::shared_ptr<ITable> Database::select(std::shared_ptr<SelectStatement> selectStatement) const {

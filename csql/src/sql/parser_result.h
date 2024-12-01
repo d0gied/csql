@@ -20,6 +20,7 @@ class SQLParserResult {
   int errorLine() const;
   int errorColumn() const;
   void addStatement(std::shared_ptr<SQLStatement> stmt);
+  std::shared_ptr<SQLStatement> popStatement();
   std::shared_ptr<SQLStatement> getStatement(size_t index) const;
   const std::vector<std::shared_ptr<SQLStatement>>& getStatements() const;
   void reset();

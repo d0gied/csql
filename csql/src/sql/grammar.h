@@ -40,7 +40,7 @@ enum class TokenType {
 namespace token {
 const std::string KEYWORDS =
     "SELECT|INSERT|CREATE|DELETE|UPDATE|DROP|TO|FROM|WHERE|AND|OR|TABLE|ORDERED INDEX|UNORDERED "
-    "INDEX|AUTOINCREMENT|UNIQUE|KEY|TRUE|FALSE|IS NULL|IS NOT NULL|NULL|NOT|SET|JOIN|ON";
+    "INDEX|AUTOINCREMENT|UNIQUE|KEY|TRUE|FALSE|IS NULL|IS NOT NULL|NULL|NOT|SET|JOIN|ON|AS";
 const std::string TYPE = "BOOL|INT32|STRING\\[\\d+\\]|BYTES\\[\\d+\\]";
 const std::string NAME = "[a-zA-Z_][a-zA-Z_0-9]*";
 const std::string COLUMN_NAME = NAME + "\\." + NAME;  // table.column
