@@ -191,94 +191,54 @@ std::shared_ptr<csql::Expr> applyBinaryOpToLiterals(std::shared_ptr<csql::Expr> 
 namespace csql {
 namespace storage {
 
-Row::Row(std::shared_ptr<const ITable> table, Cell* cell) : table_(table), cell_(cell) {}
+Row::Row(std::shared_ptr<ITable> table, std::shared_ptr<Cell> cell) : table_(table), cell_(cell) {}
 
 template <>
 int32_t Row::get<int32_t>(size_t index) const {
-  return cell_->values_[index].getInt();
+  return cell_->get<int32_t>(index);
 }
 
 template <>
 bool Row::get<bool>(size_t index) const {
-  return cell_->values_[index].getBool();
+  return cell_->get<bool>(index);
 }
 
 template <>
 std::string Row::get<std::string>(size_t index) const {
-  return cell_->values_[index].getString();
+  return cell_->get<std::string>(index);
 }
 
 template <>
 std::vector<uint8_t> Row::get<std::vector<uint8_t>>(size_t index) const {
-  return cell_->values_[index].getBytes();
+  return cell_->getBytes(index, table_.lock()->getColumns()[index]->type().length);
 }
 
 template <>
 int32_t Row::get<int32_t>(std::string columnName) const {
-  auto table = table_.lock();
-  auto columns = table->getColumns();
-  for (size_t i = 0; i < columns.size(); i++) {
-    if (columns[i]->getName() == columnName) {
-      return get<int32_t>(i);
-    }
-  }
-
-  throw std::runtime_error("Column not found: " + columnName);
+  return get<int32_t>(getIndexOfColumn(columnName));
 }
 
 template <>
 bool Row::get<bool>(std::string columnName) const {
-  auto table = table_.lock();
-  auto columns = table->getColumns();
-  for (size_t i = 0; i < columns.size(); i++) {
-    if (columns[i]->getName() == columnName) {
-      return get<bool>(i);
-    }
-  }
-
-  throw std::runtime_error("Column not found: " + columnName);
+  return get<bool>(getIndexOfColumn(columnName));
 }
 
 template <>
 std::string Row::get<std::string>(std::string columnName) const {
-  auto table = table_.lock();
-  auto columns = table->getColumns();
-  for (size_t i = 0; i < columns.size(); i++) {
-    if (columns[i]->getName() == columnName) {
-      return get<std::string>(i);
-    }
-  }
-
-  throw std::runtime_error("Column not found: " + columnName);
+  return get<std::string>(getIndexOfColumn(columnName));
 }
 
 template <>
 std::vector<uint8_t> Row::get<std::vector<uint8_t>>(std::string columnName) const {
-  auto table = table_.lock();
-  auto columns = table->getColumns();
-  for (size_t i = 0; i < columns.size(); i++) {
-    if (columns[i]->getName() == columnName) {
-      return get<std::vector<uint8_t>>(i);
-    }
-  }
-
-  throw std::runtime_error("Column not found: " + columnName);
+  return get<std::vector<uint8_t>>(getIndexOfColumn(columnName));
 }
 
 bool Row::isNull(size_t index) const {
-  return cell_->values_[index].value == nullptr;
+  return cell_->isNull(index);
 }
 
 bool Row::isNull(std::string columnName) const {
-  auto table = table_.lock();
-  auto columns = table->getColumns();
-  for (size_t i = 0; i < columns.size(); i++) {
-    if (columns[i]->getName() == columnName) {
-      return isNull(i);
-    }
-  }
-
-  throw std::runtime_error("Column not found: " + columnName);
+  return isNull(getIndexOfColumn(columnName));
 }
 
 std::ostream& operator<<(std::ostream& stream, const Row& row) {
@@ -308,7 +268,38 @@ std::ostream& operator<<(std::ostream& stream, const Row& row) {
   return stream;
 }
 
+std::shared_ptr<Expr> Row::getColumnValue(size_t index) {
+  auto table = table_.lock();
+  if (!table) {
+    throw std::runtime_error("Table not found");
+  }
+  auto columns = table->getColumns();
+  if (isNull(index)) {
+    return Expr::makeNullLiteral();
+  }
+
+  if (columns[index]->type().data_type == DataType::INT32) {
+    return Expr::makeLiteral(get<int32_t>(index));
+  } else if (columns[index]->type().data_type == DataType::STRING) {
+    return Expr::makeStringLiteral(get<std::string>(index));
+  } else if (columns[index]->type().data_type == DataType::BOOL) {
+    return Expr::makeLiteral(get<bool>(index));
+  } else if (columns[index]->type().data_type == DataType::BYTES) {
+    return Expr::makeLiteral(get<std::vector<uint8_t>>(index));
+  }
+
+  throw std::runtime_error("Invalid data type");
+}
+
 std::shared_ptr<Expr> Row::getColumnValue(std::string columnName) {
+  return getColumnValue(getIndexOfColumn(columnName));
+}
+
+std::shared_ptr<Expr> Row::getColumnValue(std::shared_ptr<Column> column) {
+  return getColumnValue(getIndexOfColumn(column));
+}
+
+size_t Row::getIndexOfColumn(std::string columnName) const {
   auto table = table_.lock();
   if (!table) {
     throw std::runtime_error("Table not found");
@@ -316,22 +307,24 @@ std::shared_ptr<Expr> Row::getColumnValue(std::string columnName) {
   auto columns = table->getColumns();
   for (size_t i = 0; i < columns.size(); i++) {
     if (columns[i]->getName() == columnName) {
-      if (isNull(i)) {
-        return Expr::makeNullLiteral();
-      }
-
-      if (columns[i]->type().data_type == DataType::INT32) {
-        return Expr::makeLiteral(get<int32_t>(i));
-      } else if (columns[i]->type().data_type == DataType::STRING) {
-        return Expr::makeStringLiteral(get<std::string>(i));
-      } else if (columns[i]->type().data_type == DataType::BOOL) {
-        return Expr::makeLiteral(get<bool>(i));
-      } else if (columns[i]->type().data_type == DataType::BYTES) {
-        return Expr::makeLiteral(get<std::vector<uint8_t>>(i));
-      }
+      return i;
     }
   }
   throw std::runtime_error("Column not found: " + columnName);
+}
+
+size_t Row::getIndexOfColumn(std::shared_ptr<Column> column) const {
+  auto table = table_.lock();
+  if (!table) {
+    throw std::runtime_error("Table not found");
+  }
+  auto columns = table->getColumns();
+  for (size_t i = 0; i < columns.size(); i++) {
+    if (columns[i] == column) {
+      return i;
+    }
+  }
+  throw std::runtime_error("Column not found: " + column->getName());
 }
 
 std::shared_ptr<Expr> Row::evaluate(std::shared_ptr<Expr> expr) {

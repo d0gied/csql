@@ -11,6 +11,7 @@
 #include "column.h"
 #include "row.h"
 #include "sql/statements/delete.h"
+#include "sql/statements/select.h"
 #include "sql/statements/update.h"
 
 namespace csql {
@@ -18,8 +19,9 @@ namespace storage {
 
 class ITable;
 class TableIterator;
-class AllTableIterator;
+class StorageTableIterator;
 class WhereClauseIterator;
+class SelectedTable;
 class Row;
 class Column;
 
@@ -27,27 +29,11 @@ class TableIterator {
  public:
   virtual bool hasValue() const = 0;
   virtual TableIterator& operator++() = 0;
-  virtual std::shared_ptr<Row> operator*() const = 0;
+  virtual std::shared_ptr<Row> operator*() = 0;
 
-  virtual std::shared_ptr<Iterator> getMemoryIterator() const = 0;
+  virtual std::shared_ptr<Iterator> getMemoryIterator() = 0;
 
   friend class ITable;
-};
-
-class AllTableIterator : public TableIterator {
- public:
-  AllTableIterator(std::shared_ptr<const ITable> table, std::shared_ptr<Iterator> iterator);
-  virtual ~AllTableIterator() = default;
-
-  virtual bool hasValue() const override;
-  virtual AllTableIterator& operator++() override;
-  virtual std::shared_ptr<Row> operator*() const override;
-  virtual std::shared_ptr<Iterator> getMemoryIterator() const override;
-
- protected:
-  std::shared_ptr<const ITable> table_;
-  std::shared_ptr<Iterator> iterator_;
-  friend class StorageTable;
 };
 
 class WhereClauseIterator : public TableIterator {
@@ -56,15 +42,31 @@ class WhereClauseIterator : public TableIterator {
                       std::shared_ptr<Expr> whereClause);
   virtual ~WhereClauseIterator() = default;
 
-  virtual bool hasValue() const override;
-  virtual WhereClauseIterator& operator++() override;
-  virtual std::shared_ptr<Row> operator*() const override;
-  virtual std::shared_ptr<Iterator> getMemoryIterator() const override;
+  bool hasValue() const override;
+  WhereClauseIterator& operator++() override;
+  std::shared_ptr<Row> operator*() override;
+  std::shared_ptr<Iterator> getMemoryIterator() override;
 
  protected:
   std::shared_ptr<TableIterator> tableIterator_;
   std::shared_ptr<Expr> whereClause_;
   friend class StorageTable;
+};
+
+class SelectedTableIterator : public TableIterator {
+ public:
+  SelectedTableIterator(std::shared_ptr<SelectedTable> table);
+  virtual ~SelectedTableIterator() = default;
+
+  virtual bool hasValue() const override;
+  virtual SelectedTableIterator& operator++() override;
+  virtual std::shared_ptr<Row> operator*() override;
+  virtual std::shared_ptr<Iterator> getMemoryIterator() override;
+
+ protected:
+  std::shared_ptr<WhereClauseIterator> whereClauseIterator_;
+  std::shared_ptr<SelectedTable> table_;
+  friend class SelectedTable;
 };
 
 class VirtualTable;
@@ -76,16 +78,19 @@ class ITable {
   virtual void insert(std::shared_ptr<InsertStatement> insertStatement) = 0;
   virtual void delete_(std::shared_ptr<DeleteStatement> deleteStatement) = 0;
   virtual void update(std::shared_ptr<UpdateStatement> updateStatement) = 0;
+  virtual std::shared_ptr<VirtualTable> select(
+      std::shared_ptr<SelectStatement> selectStatement) = 0;
 
-  virtual std::shared_ptr<TableIterator> getIterator() const = 0;
+  virtual std::shared_ptr<TableIterator> getIterator() = 0;
   virtual const std::string& getName() const = 0;
-  virtual const std::vector<std::shared_ptr<Column>>& getColumns() const = 0;
+  virtual const std::vector<std::shared_ptr<Column>>& getColumns() = 0;
+  virtual std::shared_ptr<Column> getColumn(std::shared_ptr<Expr> columnExpr) = 0;
 
   // virtual std::shared_ptr<VirtualTable> select(std::shared_ptr<Expr> whereClause) = 0;
   // virtual std::shared_ptr<VirtualTable> join(std::shared_ptr<ITable> table,
   //                                            std::shared_ptr<Expr> onClause) = 0;
 
-  virtual void exportToCSV(const std::string& filename) = 0;
+  virtual void exportToCSV(const std::string& filename);
 };
 
 class StorageTable : public ITable, public std::enable_shared_from_this<StorageTable> {
@@ -98,13 +103,13 @@ class StorageTable : public ITable, public std::enable_shared_from_this<StorageT
   void insert(std::shared_ptr<InsertStatement> insertStatement) override;
   void delete_(std::shared_ptr<DeleteStatement> deleteStatement) override;
   void update(std::shared_ptr<UpdateStatement> updateStatement) override;
+  std::shared_ptr<VirtualTable> select(std::shared_ptr<SelectStatement> selectStatement) override;
 
-  std::shared_ptr<TableIterator> getIterator() const override;
+  std::shared_ptr<TableIterator> getIterator() override;
 
   const std::string& getName() const override;
-  const std::vector<std::shared_ptr<Column>>& getColumns() const override;
-
-  void exportToCSV(const std::string& filename) override;
+  const std::vector<std::shared_ptr<Column>>& getColumns() override;
+  std::shared_ptr<Column> getColumn(std::shared_ptr<Expr> columnExpr) override;
 
  private:
   void addColumn(std::shared_ptr<Column> column);
@@ -119,10 +124,77 @@ class StorageTable : public ITable, public std::enable_shared_from_this<StorageT
   friend std::ostream& operator<<(std::ostream& stream, const Row& row);
 };
 
+class StorageTableIterator : public TableIterator {
+ public:
+  StorageTableIterator(std::shared_ptr<StorageTable> table, std::shared_ptr<Iterator> iterator);
+  virtual ~StorageTableIterator() = default;
+
+  virtual bool hasValue() const override;
+  virtual StorageTableIterator& operator++() override;
+  virtual std::shared_ptr<Row> operator*() override;
+  virtual std::shared_ptr<Iterator> getMemoryIterator() override;
+
+ protected:
+  std::shared_ptr<StorageTable> table_;
+  std::shared_ptr<Iterator> iterator_;
+  friend class StorageTable;
+};
+
 class VirtualTable : public ITable {
  public:
-  VirtualTable();
-  virtual ~VirtualTable();
+  VirtualTable() = default;
+  virtual ~VirtualTable() = default;
+};
+
+class JoinTable : public VirtualTable {
+ public:
+  JoinTable(std::shared_ptr<ITable> table1, std::shared_ptr<ITable> table2,
+            std::shared_ptr<Expr> onClause);
+  virtual ~JoinTable() = default;
+
+  void insert(std::shared_ptr<InsertStatement> insertStatement) override;
+  void delete_(std::shared_ptr<DeleteStatement> deleteStatement) override;
+  void update(std::shared_ptr<UpdateStatement> updateStatement) override;
+  std::shared_ptr<VirtualTable> select(std::shared_ptr<SelectStatement> selectStatement) override;
+
+  std::shared_ptr<TableIterator> getIterator() override;
+  const std::string& getName() const override;
+  const std::vector<std::shared_ptr<Column>>& getColumns() override;
+  std::shared_ptr<Column> getColumn(std::shared_ptr<Expr> columnExpr) override;
+
+ private:
+  std::shared_ptr<ITable> table1_;
+  std::shared_ptr<ITable> table2_;
+  std::shared_ptr<Expr> onClause_;
+};
+
+class SelectedTable : public VirtualTable, public std::enable_shared_from_this<SelectedTable> {
+ public:
+  SelectedTable(std::shared_ptr<ITable> table, std::shared_ptr<SelectStatement> selectStatement);
+  static std::shared_ptr<SelectedTable> create(std::shared_ptr<ITable> table,
+                                               std::shared_ptr<SelectStatement> selectStatement);
+  virtual ~SelectedTable() = default;
+
+  void insert(std::shared_ptr<InsertStatement> insertStatement) override;
+  void delete_(std::shared_ptr<DeleteStatement> deleteStatement) override;
+  void update(std::shared_ptr<UpdateStatement> updateStatement) override;
+  std::shared_ptr<VirtualTable> select(std::shared_ptr<SelectStatement> selectStatement) override;
+
+  std::shared_ptr<TableIterator> getIterator() override;
+  const std::string& getName() const override;
+  const std::vector<std::shared_ptr<Column>>& getColumns() override;
+  std::shared_ptr<Column> getColumn(std::shared_ptr<Expr> columnExpr) override;
+
+  std::shared_ptr<ITable> getOriginalTable() const;
+  std::shared_ptr<Expr> getWhereClause() const;
+
+  friend class SelectedTableIterator;
+
+ private:
+  std::string name_;
+  std::shared_ptr<ITable> table_;
+  std::shared_ptr<SelectStatement> selectStatement_;
+  std::vector<std::shared_ptr<Column>> columns_;
 };
 
 }  // namespace storage

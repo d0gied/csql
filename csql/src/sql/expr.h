@@ -91,14 +91,14 @@ struct Expr {
 
   OperatorType opType;
   bool distinct;
-  bool aliased;
 
   // Convenience accessor methods.
 
   bool isType(ExprType exprType) const;
   bool isLiteral() const;
   bool hasTable() const;
-  const std::string& getName() const;
+  bool hasAlias() const;
+  std::string getName() const;
 
   // Static constructors.
 
@@ -124,8 +124,10 @@ struct Expr {
 
   // Debugging.
   std::string toMermaid(const std::string node_name = "A", bool subexpr = false) const;
+  std::string toString() const;
 };
 
 std::ostream& operator<<(std::ostream&, const Expr&);
+bool operator==(const Expr& lhs, const Expr& rhs);
 
 }  // namespace csql

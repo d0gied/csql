@@ -25,11 +25,11 @@ class Database {
 
  private:
   std::shared_ptr<ITable> getTable(std::shared_ptr<Expr> tableRef) const;
-  std::shared_ptr<TableIterator> create(std::shared_ptr<CreateStatement> createStatement);
-  std::shared_ptr<TableIterator> select(std::shared_ptr<SelectStatement> selectStatement);
-  std::shared_ptr<TableIterator> insert(std::shared_ptr<InsertStatement> insertStatement);
-  std::shared_ptr<TableIterator> delete_(std::shared_ptr<DeleteStatement> deleteStatement);
-  std::shared_ptr<TableIterator> update(std::shared_ptr<UpdateStatement> updateStatement);
+  std::shared_ptr<ITable> create(std::shared_ptr<CreateStatement> createStatement);
+  std::shared_ptr<ITable> select(std::shared_ptr<SelectStatement> selectStatement) const;
+  std::shared_ptr<ITable> insert(std::shared_ptr<InsertStatement> insertStatement);
+  std::shared_ptr<ITable> delete_(std::shared_ptr<DeleteStatement> deleteStatement);
+  std::shared_ptr<ITable> update(std::shared_ptr<UpdateStatement> updateStatement);
 
   std::unordered_map<std::string, std::shared_ptr<StorageTable>> tables_;
 };

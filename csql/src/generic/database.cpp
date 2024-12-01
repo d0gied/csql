@@ -25,13 +25,16 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
   if (result->isValid()) {
     for (auto stmt : result->getStatements()) {
       if (stmt->is(kStmtCreate)) {
-        return create(std::dynamic_pointer_cast<CreateStatement>(stmt));
+        create(std::dynamic_pointer_cast<CreateStatement>(stmt));
+        return nullptr;
       } else if (stmt->is(kStmtInsert)) {
-        return insert(std::dynamic_pointer_cast<InsertStatement>(stmt));
+        insert(std::dynamic_pointer_cast<InsertStatement>(stmt));
+        return nullptr;
       } else if (stmt->is(kStmtSelect)) {
-        return select(std::dynamic_pointer_cast<SelectStatement>(stmt));
+        return select(std::dynamic_pointer_cast<SelectStatement>(stmt))->getIterator();
       } else if (stmt->is(kStmtDelete)) {
-        return delete_(std::dynamic_pointer_cast<DeleteStatement>(stmt));
+        delete_(std::dynamic_pointer_cast<DeleteStatement>(stmt));
+        return nullptr;
         // } else if (stmt->is(kStmtUpdate)) {
         //   return update(std::dynamic_pointer_cast<UpdateStatement>(stmt));
       } else {
@@ -46,31 +49,40 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
 }
 
 std::shared_ptr<ITable> Database::getTable(std::shared_ptr<Expr> tableRef) const {
-  if (tableRef->type != kExprTableRef) {
-    throw std::runtime_error("Only table sources are supported");
+  switch (tableRef->type) {
+    case kExprTableRef: {
+      if (tables_.count(tableRef->name) == 0) {
+        throw std::runtime_error("Table not found: " + tableRef->name);
+      }
+      return tables_.at(tableRef->name);
+    } break;
+    case kExprSelect: {
+      return select(tableRef->select);
+    } break;
+    case kExprJoin: {
+      return nullptr;
+    } break;
+    default:
+      throw std::runtime_error("Failed to get table");
   }
-  if (tables_.count(tableRef->name) == 0) {
-    throw std::runtime_error("Table not found: " + tableRef->name);
-  }
-  return tables_.at(tableRef->name);
 }
 
-std::shared_ptr<TableIterator> Database::create(std::shared_ptr<CreateStatement> createStatement) {
+std::shared_ptr<ITable> Database::create(std::shared_ptr<CreateStatement> createStatement) {
   tables_[createStatement->tableName] = StorageTable::create(createStatement);
-  return nullptr;
+  return tables_[createStatement->tableName];
 }
 
-std::shared_ptr<TableIterator> Database::select(std::shared_ptr<SelectStatement> selectStatement) {
-  return std::make_shared<WhereClauseIterator>(getTable(selectStatement->fromSource)->getIterator(),
-                                               selectStatement->whereClause);
+std::shared_ptr<ITable> Database::select(std::shared_ptr<SelectStatement> selectStatement) const {
+  std::shared_ptr<ITable> table = getTable(selectStatement->fromSource);
+  return table->select(selectStatement);
 }
 
-std::shared_ptr<TableIterator> Database::insert(std::shared_ptr<InsertStatement> insertStatement) {
+std::shared_ptr<ITable> Database::insert(std::shared_ptr<InsertStatement> insertStatement) {
   getTable(insertStatement->tableRef)->insert(insertStatement);
   return nullptr;
 }
 
-std::shared_ptr<TableIterator> Database::delete_(std::shared_ptr<DeleteStatement> deleteStatement) {
+std::shared_ptr<ITable> Database::delete_(std::shared_ptr<DeleteStatement> deleteStatement) {
   getTable(deleteStatement->tableRef)->delete_(deleteStatement);
   return nullptr;
 }

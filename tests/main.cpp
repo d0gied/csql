@@ -22,7 +22,6 @@ int main() {
 
   db.execute("DELETE FROM users WHERE login = \"admin\"");
   auto iterator = db.execute("SELECT login FROM users WHERE |login| % 2 = 1");
-
   while (iterator->hasValue()) {
     auto row = *(*iterator);
     ++(*iterator);

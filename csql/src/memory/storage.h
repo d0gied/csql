@@ -12,7 +12,7 @@ class IStorage {
  public:
   virtual ~IStorage() = default;
 
-  virtual void insert(const Cell& cell) = 0;
+  virtual void insert(std::shared_ptr<Cell> cell) = 0;
   virtual void remove(std::shared_ptr<Iterator> it) = 0;
 
   virtual std::shared_ptr<Iterator> getIterator() = 0;

@@ -1,13 +1,14 @@
 #include "dummy.h"
 
-#include <iostream>
+#include <memory>
 
+#include "memory/cell.h"
 #include "memory/iterator.h"
 
 namespace csql {
 namespace storage {
 
-void DummyStorage::insert(const Cell& cell) {
+void DummyStorage::insert(std::shared_ptr<Cell> cell) {
   cells_.push_back(cell);
 }
 
@@ -43,8 +44,8 @@ void DummyIterator::next() {
   ++it_;
 }
 
-Cell* DummyIterator::get() {
-  return &(*it_);
+std::shared_ptr<Cell> DummyIterator::get() {
+  return *it_;
 }
 
 }  // namespace storage

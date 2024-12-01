@@ -9,9 +9,10 @@
 
 namespace csql {
 namespace storage {
+
 class ITable;
 
-class Column {
+class Column : public std::enable_shared_from_this<Column> {
  public:
   static std::shared_ptr<Column> create(std::shared_ptr<ColumnDefinition> columnDefinition);
   Column() = default;
@@ -26,11 +27,15 @@ class Column {
 
   int32_t maxValue() const;
 
-  std::shared_ptr<Value> createValue() const;
-  std::shared_ptr<Value> createValue(std::shared_ptr<Expr> value) const;
+  void* createValue() const;
+  void* createValue(std::shared_ptr<Expr> value) const;
+
+  std::shared_ptr<Column> clone(std::shared_ptr<ITable> table, const std::string& name = "");
+  std::shared_ptr<Column> refferedColumn() const;
 
   const ColumnType& type() const;
   friend std::ostream& operator<<(std::ostream& stream, const Column& column);
+  friend class ITable;
   friend class StorageTable;
 
  private:
@@ -40,9 +45,10 @@ class Column {
   bool is_autoincrement_ = false;
   bool is_key_ = false;
   bool is_unique_ = false;
-  void* default_value_;
+  std::shared_ptr<Expr> default_value_;
 
   std::weak_ptr<ITable> table_;
+  std::shared_ptr<Column> reffered_column_;
 };
 
 }  // namespace storage

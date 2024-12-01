@@ -14,7 +14,7 @@ class Iterator {
 
   virtual bool hasValue() = 0;
   virtual void next() = 0;
-  virtual Cell* get() = 0;
+  virtual std::shared_ptr<Cell> get() = 0;
 };
 
 }  // namespace storage

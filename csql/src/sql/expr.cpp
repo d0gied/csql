@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <sstream>
 #include <string>
 
 #include "statements/select.h"
@@ -270,8 +271,37 @@ bool Expr::hasTable() const {
   return table != "";
 }
 
-const std::string& Expr::getName() const {
+bool Expr::hasAlias() const {
+  return alias != "";
+}
+
+std::string Expr::getName() const {
   return name;
+}
+
+bool operator==(const Expr& lhs, const Expr& rhs) {
+  if (lhs.type != rhs.type) {
+    throw std::runtime_error("Different expression types: " + std::to_string(lhs.type) + " vs. " +
+                             std::to_string(rhs.type));
+  } else if (lhs.type == kExprLiteralInt) {
+    return lhs.ival == rhs.ival;
+  } else if (lhs.type == kExprLiteralString) {
+    return lhs.name == rhs.name;
+  } else if (lhs.type == kExprLiteralBool) {
+    return lhs.ival == rhs.ival;
+  } else if (lhs.type == kExprLiteralBytes) {
+    return lhs.name == rhs.name;
+  } else if (lhs.type == kExprLiteralNull) {
+    return true;
+  } else if (lhs.type == kExprColumnRef) {
+    return lhs.name == rhs.name && lhs.table == rhs.table;
+  } else if (lhs.type == kExprStar) {
+    return lhs.table == rhs.table;
+  } else if (lhs.type == kExprTableRef) {
+    return lhs.name == rhs.name;
+  } else {
+    throw std::runtime_error("Unsupported expression type: " + std::to_string(lhs.type));
+  }
 }
 
 std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
@@ -371,6 +401,12 @@ std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
       stream << "UNKNOWN_EXPR";
   }
   return stream;
+}
+
+std::string Expr::toString() const {
+  std::stringstream ss;
+  ss << *this;
+  return ss.str();
 }
 
 std::string Expr::toMermaid(std::string node_name, bool subexpr) const {

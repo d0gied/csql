@@ -4,6 +4,7 @@
 #include <ostream>
 
 #include "../memory/cell.h"
+#include "memory/iterator.h"
 #include "table.h"
 
 namespace csql {
@@ -13,10 +14,14 @@ class Row;
 class Column;
 class Cell;
 class ITable;
+class StorageTable;
+class Iterator;
+class WhereClauseIterator;
+class SelectedTableIterator;
 
 class Row {
  public:
-  Row(std::shared_ptr<const ITable> table, Cell* cell);
+  Row(std::shared_ptr<ITable> table, std::shared_ptr<Cell> cell);
   virtual ~Row() = default;
 
   template <typename T>
@@ -28,15 +33,26 @@ class Row {
   bool isNull(size_t index) const;
   bool isNull(std::string columnName) const;
 
-  std::shared_ptr<Expr> evaluate(std::shared_ptr<Expr> expr);
-  std::shared_ptr<Expr> getColumnValue(std::string columnName);
-
   friend std::ostream& operator<<(std::ostream& stream, const Row& row);
+
   friend class ITable;
+  friend class StorageTable;
+  friend class Iterator;
+  friend class WhereClauseIterator;
+  friend class SelectedTableIterator;
 
  private:
-  std::weak_ptr<const ITable> table_;
-  Cell* cell_;
+  std::shared_ptr<Expr> evaluate(std::shared_ptr<Expr> expr);
+  std::shared_ptr<Expr> getColumnValue(size_t index);
+  std::shared_ptr<Expr> getColumnValue(std::string columnName);
+  std::shared_ptr<Expr> getColumnValue(std::shared_ptr<Column> column);
+
+  size_t getIndexOfColumn(std::string columnName) const;
+  size_t getIndexOfColumn(std::shared_ptr<Column> column) const;
+
+ private:
+  std::weak_ptr<ITable> table_;
+  std::shared_ptr<Cell> cell_;
 };
 }  // namespace storage
 }  // namespace csql
