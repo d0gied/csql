@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "../expr.h"
 #include "statement.h"
 
@@ -19,7 +21,7 @@ struct SelectStatement : SQLStatement {
   SelectStatement() : SQLStatement(kStmtSelect), selectDistinct(false) {}
   ~SelectStatement() override = default;
 
-  std::string fromTable;
+  std::shared_ptr<Expr> fromSource;
   bool selectDistinct;
   std::shared_ptr<std::vector<std::shared_ptr<Expr>>> selectList;  // List of expressions to select.
   std::shared_ptr<Expr> whereClause;

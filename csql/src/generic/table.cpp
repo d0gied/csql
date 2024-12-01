@@ -14,12 +14,13 @@
 
 namespace csql {
 namespace storage {
-Table::Table() : storage_(std::make_shared<DummyStorage>()) {}
+StorageTable::StorageTable() : storage_(std::make_shared<DummyStorage>()) {}
 
-Table::~Table() {}
+StorageTable::~StorageTable() {}
 
-std::shared_ptr<Table> Table::create(std::shared_ptr<CreateStatement> createStatement) {
-  std::shared_ptr<Table> table = std::make_shared<Table>();
+std::shared_ptr<StorageTable> StorageTable::create(
+    std::shared_ptr<CreateStatement> createStatement) {
+  std::shared_ptr<StorageTable> table = std::make_shared<StorageTable>();
   for (const auto& column : *createStatement->columns) {
     table->addColumn(Column::create(column));
   }
@@ -27,27 +28,23 @@ std::shared_ptr<Table> Table::create(std::shared_ptr<CreateStatement> createStat
   return table;
 }
 
-void Table::addColumn(std::shared_ptr<Column> column) {
+void StorageTable::addColumn(std::shared_ptr<Column> column) {
   columns_.push_back(column);
   column->table_ = shared_from_this();
 }
 
-size_t Table::size() const {
-  return storage_->size();
-}
-
-const std::string& Table::getName() const {
+const std::string& StorageTable::getName() const {
   return name_;
 }
 
-const std::vector<std::shared_ptr<Column>>& Table::getColumns() const {
+const std::vector<std::shared_ptr<Column>>& StorageTable::getColumns() const {
   return columns_;
 }
 
-void Table::insert(std::shared_ptr<InsertStatement> insertStatement) {
+void StorageTable::insert(std::shared_ptr<InsertStatement> insertStatement) {
   std::vector<std::shared_ptr<Value>> values;
   if (insertStatement->insertType == InsertType::kInsertKeysValues) {
-    for (const auto& column : columns_) {
+    for (auto column : columns_) {
       bool found = false;
       for (const auto& columnValue : *insertStatement->columnValues) {
         if (column->getName() == columnValue->name) {
@@ -78,7 +75,7 @@ void Table::insert(std::shared_ptr<InsertStatement> insertStatement) {
     }
   }
 
-  if (check_unique && size() > 0) {
+  if (check_unique) {
     auto it = getIterator();
     while (it->hasValue()) {
       auto row = *(*it);
@@ -120,7 +117,7 @@ void Table::insert(std::shared_ptr<InsertStatement> insertStatement) {
   storage_->insert(*Cell::create(values));
 }
 
-void Table::delete_(std::shared_ptr<DeleteStatement> deleteStatement) {
+void StorageTable::delete_(std::shared_ptr<DeleteStatement> deleteStatement) {
   auto it = getIterator();
   while (it->hasValue()) {
     auto row = *(*it);
@@ -136,11 +133,35 @@ void Table::delete_(std::shared_ptr<DeleteStatement> deleteStatement) {
   }
 }
 
-std::shared_ptr<AllTableIterator> Table::getIterator() {
+void StorageTable::update(std::shared_ptr<UpdateStatement> updateStatement) {
+  // auto it = getIterator();
+  // while (it->hasValue()) {
+  //   auto row = *(*it);
+  //   auto expr = row->evaluate(updateStatement->whereClause);
+  //   if (expr->type != kExprLiteralBool) {
+  //     throw std::runtime_error("Expected boolean expression");
+  //   }
+  //   if (expr->ival) {
+  //     for (const auto& columnValue : *updateStatement->columnValues) {
+  //       for (size_t i = 0; i < columns_.size(); i++) {
+  //         if (columns_[i]->getName() == columnValue->name) {
+  //           row->set(i, columnValue->value);
+  //           break;
+  //         }
+  //       }
+  //     }
+  //     storage_->update(it->getMemoryIterator(), *Cell::create(row->values()));
+  //   }
+  //   ++(*it);
+  // }
+}
+
+std::shared_ptr<TableIterator> StorageTable::getIterator() const {
   return std::make_shared<AllTableIterator>(shared_from_this(), storage_->getIterator());
 }
 
-AllTableIterator::AllTableIterator(std::shared_ptr<Table> table, std::shared_ptr<Iterator> iterator)
+AllTableIterator::AllTableIterator(std::shared_ptr<const ITable> table,
+                                   std::shared_ptr<Iterator> iterator)
     : iterator_(iterator), table_(table) {}
 
 bool AllTableIterator::hasValue() const {
@@ -204,7 +225,7 @@ std::shared_ptr<Iterator> WhereClauseIterator::getMemoryIterator() const {
   return tableIterator_->getMemoryIterator();
 }
 
-void Table::exportToCSV(const std::string& filename) {
+void StorageTable::exportToCSV(const std::string& filename) {
   // export table to csv
   std::ofstream file(filename);
   if (!file.is_open()) {
@@ -218,11 +239,6 @@ void Table::exportToCSV(const std::string& filename) {
     }
   }
   file << std::endl;
-
-  if (size() == 0) {
-    file.close();
-    return;
-  }
 
   auto it = getIterator();
 

@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <ostream>
-#include <vector>
 
 #include "../memory/cell.h"
 #include "table.h"
@@ -13,10 +12,11 @@ namespace storage {
 class Row;
 class Column;
 class Cell;
+class ITable;
 
 class Row {
  public:
-  Row(std::shared_ptr<Table> table, Cell* cell);
+  Row(std::shared_ptr<const ITable> table, Cell* cell);
   virtual ~Row() = default;
 
   template <typename T>
@@ -32,10 +32,10 @@ class Row {
   std::shared_ptr<Expr> getColumnValue(std::string columnName);
 
   friend std::ostream& operator<<(std::ostream& stream, const Row& row);
-  friend class Table;
+  friend class ITable;
 
  private:
-  std::weak_ptr<Table> table_;
+  std::weak_ptr<const ITable> table_;
   Cell* cell_;
 };
 }  // namespace storage

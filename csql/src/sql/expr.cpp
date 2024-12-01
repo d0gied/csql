@@ -224,6 +224,12 @@ std::shared_ptr<Expr> Expr::makeColumnRef(const std::string& table, const std::s
   return e;
 }
 
+std::shared_ptr<Expr> Expr::makeTableRef(const std::string& name) {
+  std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprTableRef);
+  e->name = name;
+  return e;
+}
+
 std::shared_ptr<Expr> Expr::makeStar(void) {
   std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprStar);
   return e;
@@ -240,6 +246,16 @@ std::shared_ptr<Expr> Expr::makeSelect(std::shared_ptr<SelectStatement> select) 
   e->select = select;
   return e;
 }
+
+// std::shared_ptr<Expr> Expr::makeJoin(std::shared_ptr<Expr> source1, std::shared_ptr<Expr>
+// source2,
+//                                      std::shared_ptr<Expr> on) {
+//   std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprJoin);
+//   e->expr = source1;
+//   e->expr2 = source2;
+//   e->select = on;
+//   return e;
+// }
 
 bool Expr::isType(ExprType exprType) const {
   return exprType == type;
@@ -345,6 +361,14 @@ std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
       }
 
     } break;
+    case kExprSelect:
+      stream << "SELECT";
+      break;
+    case kExprTableRef:
+      stream << expr.name;
+      break;
+    default:
+      stream << "UNKNOWN_EXPR";
   }
   return stream;
 }
@@ -431,6 +455,9 @@ std::string Expr::toMermaid(std::string node_name, bool subexpr) const {
     } break;
     case kExprSelect:
       result += "SELECT}";
+      break;
+    case kExprTableRef:
+      result = node_name + "(" + name + ")";
       break;
   }
   result = result + "\n";

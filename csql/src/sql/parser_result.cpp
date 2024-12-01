@@ -4,6 +4,11 @@
 #include <algorithm>
 
 #include "sql/parser.h"
+#include "sql/statements/create.h"
+#include "sql/statements/delete.h"
+#include "sql/statements/insert.h"
+#include "sql/statements/select.h"
+#include "sql/statements/update.h"
 
 namespace csql {
 
@@ -73,11 +78,15 @@ std::ostream& operator<<(std::ostream& stream, const SQLParserResult& result) {
   if (result.isValid()) {
     for (const auto& stmt : result.getStatements()) {
       if (stmt->is(kStmtCreate)) {
-        stream << *std::dynamic_pointer_cast<CreateStatement>(stmt) << std::endl;
+        stream << *std::dynamic_pointer_cast<CreateStatement>(stmt);
       } else if (stmt->is(kStmtInsert)) {
-        stream << *std::dynamic_pointer_cast<InsertStatement>(stmt) << std::endl;
+        stream << *std::dynamic_pointer_cast<InsertStatement>(stmt);
       } else if (stmt->is(kStmtSelect)) {
-        stream << *std::dynamic_pointer_cast<SelectStatement>(stmt) << std::endl;
+        stream << *std::dynamic_pointer_cast<SelectStatement>(stmt);
+      } else if (stmt->is(kStmtDelete)) {
+        stream << *std::dynamic_pointer_cast<DeleteStatement>(stmt);
+      } else if (stmt->is(kStmtUpdate)) {
+        stream << *std::dynamic_pointer_cast<UpdateStatement>(stmt);
       } else {
         stream << "Unknown statement" << std::endl;
       }

@@ -191,7 +191,7 @@ std::shared_ptr<csql::Expr> applyBinaryOpToLiterals(std::shared_ptr<csql::Expr> 
 namespace csql {
 namespace storage {
 
-Row::Row(std::shared_ptr<Table> table, Cell* cell) : table_(table), cell_(cell) {}
+Row::Row(std::shared_ptr<const ITable> table, Cell* cell) : table_(table), cell_(cell) {}
 
 template <>
 int32_t Row::get<int32_t>(size_t index) const {
@@ -216,8 +216,9 @@ std::vector<uint8_t> Row::get<std::vector<uint8_t>>(size_t index) const {
 template <>
 int32_t Row::get<int32_t>(std::string columnName) const {
   auto table = table_.lock();
-  for (size_t i = 0; i < table->columns_.size(); i++) {
-    if (table->columns_[i]->getName() == columnName) {
+  auto columns = table->getColumns();
+  for (size_t i = 0; i < columns.size(); i++) {
+    if (columns[i]->getName() == columnName) {
       return get<int32_t>(i);
     }
   }
@@ -228,8 +229,9 @@ int32_t Row::get<int32_t>(std::string columnName) const {
 template <>
 bool Row::get<bool>(std::string columnName) const {
   auto table = table_.lock();
-  for (size_t i = 0; i < table->columns_.size(); i++) {
-    if (table->columns_[i]->getName() == columnName) {
+  auto columns = table->getColumns();
+  for (size_t i = 0; i < columns.size(); i++) {
+    if (columns[i]->getName() == columnName) {
       return get<bool>(i);
     }
   }
@@ -240,8 +242,9 @@ bool Row::get<bool>(std::string columnName) const {
 template <>
 std::string Row::get<std::string>(std::string columnName) const {
   auto table = table_.lock();
-  for (size_t i = 0; i < table->columns_.size(); i++) {
-    if (table->columns_[i]->getName() == columnName) {
+  auto columns = table->getColumns();
+  for (size_t i = 0; i < columns.size(); i++) {
+    if (columns[i]->getName() == columnName) {
       return get<std::string>(i);
     }
   }
@@ -252,8 +255,9 @@ std::string Row::get<std::string>(std::string columnName) const {
 template <>
 std::vector<uint8_t> Row::get<std::vector<uint8_t>>(std::string columnName) const {
   auto table = table_.lock();
-  for (size_t i = 0; i < table->columns_.size(); i++) {
-    if (table->columns_[i]->getName() == columnName) {
+  auto columns = table->getColumns();
+  for (size_t i = 0; i < columns.size(); i++) {
+    if (columns[i]->getName() == columnName) {
       return get<std::vector<uint8_t>>(i);
     }
   }
@@ -267,8 +271,9 @@ bool Row::isNull(size_t index) const {
 
 bool Row::isNull(std::string columnName) const {
   auto table = table_.lock();
-  for (size_t i = 0; i < table->columns_.size(); i++) {
-    if (table->columns_[i]->getName() == columnName) {
+  auto columns = table->getColumns();
+  for (size_t i = 0; i < columns.size(); i++) {
+    if (columns[i]->getName() == columnName) {
       return isNull(i);
     }
   }
@@ -278,8 +283,9 @@ bool Row::isNull(std::string columnName) const {
 
 std::ostream& operator<<(std::ostream& stream, const Row& row) {
   auto table = row.table_.lock();
-  for (size_t i = 0; i < table->columns_.size(); i++) {
-    auto column = table->columns_[i];
+  auto columns = table->getColumns();
+  for (size_t i = 0; i < columns.size(); i++) {
+    auto column = columns[i];
     std::string data;
     if (column->type().data_type == DataType::STRING) {
       data = row.get<std::string>(i);
@@ -292,7 +298,7 @@ std::ostream& operator<<(std::ostream& stream, const Row& row) {
     }
 
     stream << column->getName() << ": " << data;
-    if (i < table->columns_.size() - 1) {
+    if (i < columns.size() - 1) {
       stream << ", ";
     }
 

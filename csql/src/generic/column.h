@@ -5,10 +5,11 @@
 
 #include "../memory/cell.h"
 #include "../sql/statements/create.h"
+#include "generic/table.h"
 
 namespace csql {
 namespace storage {
-class Table;
+class ITable;
 
 class Column {
  public:
@@ -30,7 +31,7 @@ class Column {
 
   const ColumnType& type() const;
   friend std::ostream& operator<<(std::ostream& stream, const Column& column);
-  friend class Table;
+  friend class StorageTable;
 
  private:
   ColumnType column_type_;
@@ -41,7 +42,7 @@ class Column {
   bool is_unique_ = false;
   void* default_value_;
 
-  std::weak_ptr<Table> table_;
+  std::weak_ptr<ITable> table_;
 };
 
 }  // namespace storage

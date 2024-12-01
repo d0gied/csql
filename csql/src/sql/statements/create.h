@@ -60,6 +60,7 @@ struct CreateStatement : SQLStatement {
   std::shared_ptr<std::vector<std::string>> indexColumns;
   std::shared_ptr<std::vector<std::shared_ptr<ColumnDefinition>>> columns;
   std::shared_ptr<std::vector<std::shared_ptr<TableConstraint>>> tableConstraints;
+  std::shared_ptr<Expr> sourceRef;  // CREATE TABLE AS SELECT
 };
 
 std::ostream &operator<<(std::ostream &, const ColumnDefinition &);

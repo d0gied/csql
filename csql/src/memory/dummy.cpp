@@ -1,5 +1,7 @@
 #include "dummy.h"
 
+#include <iostream>
+
 #include "memory/iterator.h"
 
 namespace csql {
@@ -18,7 +20,6 @@ void DummyStorage::remove(std::shared_ptr<Iterator> it) {
 }
 
 std::shared_ptr<Iterator> DummyStorage::getIterator() {
-  if (cells_.empty()) return nullptr;
   return std::make_shared<DummyIterator>(shared_from_this());
 }
 

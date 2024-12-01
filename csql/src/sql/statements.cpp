@@ -1,7 +1,10 @@
-#include "statements.h"
-
 #include <string>
 
+#include "sql/statements/create.h"
+#include "sql/statements/delete.h"
+#include "sql/statements/insert.h"
+#include "sql/statements/select.h"
+#include "sql/statements/update.h"
 #include "table.h"
 
 namespace csql {
@@ -61,8 +64,8 @@ ColumnValueDefinition::ColumnValueDefinition(const std::string& name, std::share
 ColumnValueDefinition::ColumnValueDefinition(std::shared_ptr<Expr> value)
     : value(value), isNamed(false) {}
 
-InsertStatement::InsertStatement(InsertType type, std::string tableName)
-    : SQLStatement(kStmtInsert), insertType(type), tableName(tableName), columnValues(nullptr) {}
+InsertStatement::InsertStatement(InsertType type, std::shared_ptr<Expr> table)
+    : SQLStatement(kStmtInsert), insertType(type), tableRef(table) {}
 
 void InsertStatement::setColumnValues(
     std::shared_ptr<std::vector<std::shared_ptr<ColumnValueDefinition>>> columnValues) {
@@ -78,7 +81,7 @@ std::ostream& operator<<(std::ostream& stream, const ColumnValueDefinition& colu
 }
 
 std::ostream& operator<<(std::ostream& stream, const InsertStatement& insert_statement) {
-  stream << "INSERT INTO " << insert_statement.tableName << " ";
+  stream << "INSERT INTO " << *insert_statement.tableRef << " ";
   if (insert_statement.insertType == InsertType::kInsertKeysValues) {
     stream << "(";
     for (size_t i = 0; i < insert_statement.columnValues->size(); i++) {
@@ -116,7 +119,7 @@ std::ostream& operator<<(std::ostream& stream, const SelectStatement& select_sta
       stream << ", ";
     }
   }
-  stream << " FROM " << select_statement.fromTable;
+  stream << " FROM " << *select_statement.fromSource;
   if (select_statement.whereClause) {
     stream << " WHERE " << *select_statement.whereClause;
   }
@@ -125,10 +128,11 @@ std::ostream& operator<<(std::ostream& stream, const SelectStatement& select_sta
 
 // DeleteStatement
 std::ostream& operator<<(std::ostream& stream, const DeleteStatement& delete_statement) {
-  stream << "DELETE FROM " << delete_statement.fromTable;
+  stream << "DELETE FROM " << *delete_statement.tableRef;
   if (delete_statement.whereClause) {
     stream << " WHERE " << *delete_statement.whereClause;
   }
+
   return stream;
 }
 

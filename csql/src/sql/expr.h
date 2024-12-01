@@ -20,9 +20,11 @@ enum ExprType {
   kExprLiteralNull,
 
   kExprStar,
+  kExprTableRef,
   kExprColumnRef,
   kExprOperator,
   kExprSelect,
+  kExprJoin,
 };
 
 // Operator types. These are important for expressions of type kExprOperator.
@@ -81,6 +83,7 @@ struct Expr {
   std::shared_ptr<Expr> expr2;
   std::shared_ptr<SelectStatement> select;
   std::string name;
+  std::string alias;
   std::string table;
   int32_t ival;
   int32_t ival2;
@@ -88,6 +91,7 @@ struct Expr {
 
   OperatorType opType;
   bool distinct;
+  bool aliased;
 
   // Convenience accessor methods.
 
@@ -110,11 +114,13 @@ struct Expr {
   static std::shared_ptr<Expr> makeNullLiteral();
   static std::shared_ptr<Expr> makeColumnRef(const std::string& name);
   static std::shared_ptr<Expr> makeColumnRef(const std::string& table, const std::string& name);
+  static std::shared_ptr<Expr> makeTableRef(const std::string& name);
   static std::shared_ptr<Expr> makeStar(void);
   static std::shared_ptr<Expr> makeStar(const std::string& table);
   static std::shared_ptr<Expr> makeParameter(int id);
   static std::shared_ptr<Expr> makeSelect(std::shared_ptr<SelectStatement> select);
-  static std::shared_ptr<Expr> makeCast(std::shared_ptr<Expr> expr, ColumnType columnType);
+  static std::shared_ptr<Expr> makeJoin(std::shared_ptr<Expr> source1,
+                                        std::shared_ptr<Expr> source2, std::shared_ptr<Expr> on);
 
   // Debugging.
   std::string toMermaid(const std::string node_name = "A", bool subexpr = false) const;

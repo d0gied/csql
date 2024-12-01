@@ -1,6 +1,7 @@
 #include "sql/parser.h"
 
 #include <boost/regex.hpp>
+#include <boost/regex/v5/regex_match.hpp>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -12,7 +13,10 @@
 #include "sql/grammar.h"
 #include "sql/parser_result.h"
 #include "sql/statements/create.h"
+#include "sql/statements/delete.h"
 #include "sql/statements/insert.h"
+#include "sql/statements/select.h"
+#include "sql/statements/update.h"
 #include "sql/tokenizer.h"
 
 namespace {
@@ -267,7 +271,7 @@ bool parseInsert(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
   }
 
   std::shared_ptr<csql::InsertStatement> insertStatement =
-      std::make_shared<csql::InsertStatement>(insertType, tableName);
+      std::make_shared<csql::InsertStatement>(insertType, csql::Expr::makeTableRef(tableName));
   insertStatement->columnValues = columnValues;
 
   result->addStatement(insertStatement);
@@ -322,7 +326,7 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
                                    parseExpr(tokenizer, result, ")"));
   } else if (token.value == "|") {
     left =
-        csql::Expr::makeOpUnary(csql::OperatorType::kOpLength, parseExpr(tokenizer, result, "|"));
+        csql::Expr::makeOpUnary(csql::OperatorType::kOpLength, parseExpr(tokenizer, result, "\\|"));
   } else if (token.value == "NOT") {
     left = csql::Expr::makeOpUnary(csql::OperatorType::kOpNot, parseExpr(tokenizer, result));
   } else if (token.value == "-") {
@@ -354,7 +358,8 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
   }
 
   token = tokenizer.nextToken();
-  while (token.value != until && token.type != csql::TokenType::TERMINAL) {
+  boost::regex re(until.data());
+  while (!boost::regex_match(token.value, re) && token.type != csql::TokenType::TERMINAL) {
     if (token.type != csql::TokenType::OPERATOR && token.value != "OR" && token.value != "AND" &&
         token.value != "IS NULL" && token.value != "IS NOT NULL") {
       result->setErrorDetails("Expected operator", 0, 0, token);
@@ -457,7 +462,7 @@ bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
 
   std::shared_ptr<csql::SelectStatement> selectStatement =
       std::make_shared<csql::SelectStatement>();
-  selectStatement->fromTable = token.value;
+  selectStatement->fromSource = csql::Expr::makeTableRef(token.value);
   selectStatement->selectList = selectList;
 
   token = tokenizer.nextToken();
@@ -471,6 +476,7 @@ bool parseSelect(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
   if (!selectStatement->whereClause) {
     return false;
   }
+
   result->addStatement(selectStatement);
   result->setIsValid(true);
 
@@ -492,7 +498,7 @@ bool parseDelete(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
 
   std::shared_ptr<csql::DeleteStatement> deleteStatement =
       std::make_shared<csql::DeleteStatement>();
-  deleteStatement->fromTable = token.value;
+  deleteStatement->tableRef = csql::Expr::makeTableRef(token.value);
 
   token = tokenizer.nextToken();
   if (token.value != "WHERE") {
@@ -507,6 +513,69 @@ bool parseDelete(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserR
   }
   result->addStatement(deleteStatement);
   result->setIsValid(true);
+
+  return true;
+}
+
+bool parseUpdate(csql::SQLTokenizer &tokenizer, std::shared_ptr<csql::SQLParserResult> result) {
+  csql::Token token = tokenizer.nextToken();
+
+  if (token.type != csql::TokenType::NAME) {
+    result->setErrorDetails("Expected table name", 0, 0, token);
+    return false;
+  }
+  std::string tableName = token.value;
+
+  token = tokenizer.nextToken();
+  if (token.value != "SET") {
+    result->setErrorDetails("Expected SET", 0, 0, token);
+    return false;
+  }
+
+  std::shared_ptr<std::vector<std::shared_ptr<csql::ColumnValueDefinition>>> columnValues =
+      std::make_shared<std::vector<std::shared_ptr<csql::ColumnValueDefinition>>>();
+
+  token = tokenizer.nextToken();
+  while (token.value != "WHERE") {
+    if (token.type != csql::TokenType::NAME) {
+      result->setErrorDetails("Expected column name", 0, 0, token);
+      return false;
+    }
+    std::string columnName = token.value;
+
+    token = tokenizer.nextToken();
+    if (token.value != "=") {
+      result->setErrorDetails("Expected =", 0, 0, token);
+      return false;
+    }
+
+    std::shared_ptr<csql::Expr> value = parseExpr(tokenizer, result, ",|WHERE");
+    if (!value) {
+      return false;
+    }
+
+    columnValues->push_back(std::make_shared<csql::ColumnValueDefinition>(columnName, value));
+
+    token = tokenizer.get();
+    if (token.value == ",") {
+      token = tokenizer.nextToken();
+    } else if (token.value != "WHERE") {
+      result->setErrorDetails("Expected , or WHERE", 0, 0, token);
+      return false;
+    }
+  }
+
+  if (columnValues->empty()) {
+    result->setErrorDetails("Expected at least one column value", 0, 0, token);
+    return false;
+  }
+
+  std::shared_ptr<csql::UpdateStatement> updateStatement =
+      std::make_shared<csql::UpdateStatement>();
+
+  updateStatement->table = csql::Expr::makeTableRef(tableName);
+  updateStatement->columnValues = columnValues;
+  updateStatement->whereClause = parseExpr(tokenizer, result, ";");
 
   return true;
 }

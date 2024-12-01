@@ -69,9 +69,6 @@ int32_t Column::maxValue() const {
   if (!table) {
     throw std::runtime_error("Table not found");
   }
-  if (table->size() == 0) {
-    return 0;
-  }
   auto iter = table->getIterator();
   int32_t max = 0;
   while (iter->hasValue()) {

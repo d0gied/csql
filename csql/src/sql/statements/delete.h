@@ -1,5 +1,7 @@
 #pragma once
 
+#include <memory>
+
 #include "../expr.h"
 #include "statement.h"
 
@@ -9,7 +11,7 @@ struct DeleteStatement : SQLStatement {
   DeleteStatement() : SQLStatement(kStmtDelete) {}
   ~DeleteStatement() override = default;
 
-  std::string fromTable;
+  std::shared_ptr<Expr> tableRef;
   std::shared_ptr<Expr> whereClause;
 };
 

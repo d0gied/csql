@@ -27,14 +27,14 @@ enum InsertType {
 };
 
 struct InsertStatement : SQLStatement {
-  InsertStatement(InsertType type, std::string tableName);
+  InsertStatement(InsertType type, std::shared_ptr<Expr> tableRef);
   ~InsertStatement() = default;
 
   void setColumnValues(
       std::shared_ptr<std::vector<std::shared_ptr<ColumnValueDefinition>>> columnValues);
 
   InsertType insertType;
-  std::string tableName;
+  std::shared_ptr<Expr> tableRef;
   std::shared_ptr<std::vector<std::shared_ptr<ColumnValueDefinition>>> columnValues;
 };
 
