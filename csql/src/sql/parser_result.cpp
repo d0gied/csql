@@ -97,8 +97,9 @@ std::ostream& operator<<(std::ostream& stream, const SQLParserResult& result) {
       } else if (stmt->is(kStmtUpdate)) {
         stream << *std::dynamic_pointer_cast<UpdateStatement>(stmt);
       } else {
-        stream << "Unknown statement" << std::endl;
+        stream << "Unknown statement";
       }
+      stream << ";" << std::endl;
     }
   } else {
     stream << "Invalid: " << result.errorMsg();

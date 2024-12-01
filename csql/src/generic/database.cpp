@@ -24,7 +24,7 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
     std::cout << "Parsing failed: " << result->errorMsg() << std::endl;
     return nullptr;
   }
-  std::cout << *result << std::endl;
+  std::cout << *result;
 
   if (result->isValid()) {
     for (auto stmt : result->getStatements()) {

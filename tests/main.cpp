@@ -20,11 +20,11 @@ int main() {
   }
   db.execute("DELETE FROM users WHERE login = \"user2\"");
   auto iterator = db.execute("SELECT login AS username FROM users WHERE |login| % 2 = 1");
-  while (iterator->hasValue()) {
-    auto row = *(*iterator);
-    ++(*iterator);
-    std::cout << "Login: " << row->get<std::string>("username") << std::endl;
-  }
+  // while (iterator->hasValue()) {
+  //   auto row = *(*iterator);
+  //   ++(*iterator);
+  //   std::cout << "Login: " << row->get<std::string>("username") << std::endl;
+  // }
 
   db.execute(
       "CREATE TABLE test AS (SELECT login as username, password_hash FROM users WHERE is_admin = "

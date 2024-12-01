@@ -55,7 +55,7 @@ std::ostream& operator<<(std::ostream& stream, const CreateStatement& create) {
       for (auto column : *create.columns) {
         stream << *column << ",\n";
       }
-      stream << ");";
+      stream << ")";
       break;
     case CreateType::kCreateIndex:
       stream << "INDEX ";
