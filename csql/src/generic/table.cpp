@@ -97,6 +97,27 @@ ColumnType ITable::predictType(std::shared_ptr<Expr> expr) {
   }
 }
 
+const std::string& ITable::getName() const {
+  return name_;
+}
+
+const std::vector<std::shared_ptr<Column>>& ITable::getColumns() {
+  return columns_;
+}
+
+std::shared_ptr<Column> ITable::getColumn(std::shared_ptr<Expr> columnExpr) {
+  if (columnExpr->type == kExprColumnRef) {
+    for (const auto& column : columns_) {
+      if (column->getName() == columnExpr->name) {
+        return column;
+      }
+    }
+  } else {
+    throw std::runtime_error("Unsupported expression type: " + columnExpr->toString());
+  }
+  throw std::runtime_error("Column not found: " + columnExpr->toString());
+}
+
 void ITable::exportToCSV(const std::string& filename) {
   // export table to csv
   std::ofstream file(filename);
@@ -147,6 +168,22 @@ void ITable::exportToCSV(const std::string& filename) {
   }
 
   file.close();
+}
+
+void VirtualTable::insert(std::shared_ptr<InsertStatement> insertStatement) {
+  throw std::runtime_error("Insert not supported on virtual table");
+}
+
+void VirtualTable::delete_(std::shared_ptr<DeleteStatement> deleteStatement) {
+  throw std::runtime_error("Delete not supported on selected table");
+}
+
+void VirtualTable::update(std::shared_ptr<UpdateStatement> updateStatement) {
+  throw std::runtime_error("Update not supported on selected table");
+}
+
+std::shared_ptr<VirtualTable> VirtualTable::filter(std::shared_ptr<Expr> whereClause) {
+  return FilteredTable::create(shared_from_this(), whereClause);
 }
 
 }  // namespace storage

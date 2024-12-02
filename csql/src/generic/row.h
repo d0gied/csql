@@ -17,7 +17,7 @@ class ITable;
 class StorageTable;
 class Iterator;
 class WhereClauseIterator;
-class SelectedTableIterator;
+class FilteredTableIterator;
 
 class Row {
  public:
@@ -39,8 +39,9 @@ class Row {
   friend class StorageTable;
   friend class Iterator;
   friend class WhereClauseIterator;
-  friend class SelectedTableIterator;
+  friend class FilteredTableIterator;
   friend class JoinTableIterator;
+  friend class EvaluateIterator;
 
  private:
   std::shared_ptr<Expr> evaluate(std::shared_ptr<Expr> expr);

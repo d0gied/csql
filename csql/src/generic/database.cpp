@@ -32,7 +32,7 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
     } else if (stmt->is(kStmtInsert)) {
       insert(std::dynamic_pointer_cast<InsertStatement>(stmt));
     } else if (stmt->is(kStmtSelect)) {
-      return select(std::dynamic_pointer_cast<SelectStatement>(stmt))->getIterator();
+      return execute(plan(stmt))->getIterator();
     } else if (stmt->is(kStmtDelete)) {
       delete_(std::dynamic_pointer_cast<DeleteStatement>(stmt));
       // } else if (stmt->is(kStmtUpdate)) {
@@ -51,9 +51,6 @@ std::shared_ptr<QueryPlan> Database::plan(std::shared_ptr<SQLStatement> statemen
     return QueryPlan::create(Expr::makeSelect(select), shared_from_this());
   } else if (statement->is(kStmtCreate)) {
     auto create = std::dynamic_pointer_cast<CreateStatement>(statement);
-    if (create->type != CreateType::kCreateTableAsSelect) {
-      throw std::runtime_error("Only CREATE TABLE AS is supported for planning");
-    }
     auto db = shared_from_this();
     return QueryPlan::create(create->sourceRef, db);
   } else if (statement->is(kStmtInsert)) {
@@ -80,36 +77,64 @@ std::shared_ptr<QueryPlan> Database::plan(const std::string& sql) {
 }
 
 std::shared_ptr<ITable> Database::execute(std::shared_ptr<QueryPlan> plan) {
-  // return execute(plan->optimize());
-  return nullptr;
+  if (plan->type_ == QueryType::kStepFilter) {
+    auto table = execute(plan->left_);
+    std::cout << "Executing plan: " << plan->toString() << std::endl;
+    if (!plan->query_) {
+      throw std::runtime_error("Where clause not found");
+    }
+    if (!table) {
+      throw std::runtime_error("Table not found");
+    }
+    return table->filter(plan->query_);
+  } else if (plan->type_ == QueryType::kStepJoin) {
+    auto left = execute(plan->left_);
+    auto right = execute(plan->right_);
+    std::cout << "Executing plan: " << plan->toString() << std::endl;
+    if (!left || !right) {
+      throw std::runtime_error("Table not found");
+    }
+    return JoinTable::create(left, right, plan->query_->on, plan->query_->opType);
+  } else if (plan->type_ == QueryType::kStepProject) {
+    std::cout << "Executing plan: " << plan->toString() << std::endl;
+    if (plan->query_->type == kExprTableRef) {
+      return getTable(plan->query_);
+    }
+    throw std::runtime_error("Unsupported query type");
+  } else if (plan->type_ == QueryType::kStepEval) {
+    auto left = execute(plan->left_);
+    std::cout << "Executing plan: " << plan->toString() << std::endl;
+    if (!left) {
+      throw std::runtime_error("Table not found");
+    }
+    return EvaluatedTable::create(left, plan->query_->select->selectList);
+  } else if (plan->type_ == QueryType::kStepFullScan) {
+    auto left = execute(plan->left_);  // Return table itself
+    std::cout << "Executing plan: " << plan->toString() << std::endl;
+    if (!left) {
+      throw std::runtime_error("Table not found");
+    }
+    return left;
+  } else if (plan->type_ == QueryType::kStepRangeScan) {
+    std::cout << "Executing plan: " << plan->toString() << std::endl;
+    throw std::runtime_error("Range scan not supported");
+  } else {
+    throw std::runtime_error("Unsupported query type");
+  }
 }
 
 std::shared_ptr<ITable> Database::getTable(std::shared_ptr<Expr> tableRef) const {
-  switch (tableRef->type) {
-    case kExprTableRef: {
-      if (tables_.count(tableRef->name) == 0) {
-        throw std::runtime_error("Table not found: " + tableRef->name);
-      }
-      return tables_.at(tableRef->name);
-    } break;
-    case kExprSelect: {
-      return select(tableRef->select);
-    } break;
-    case kExprJoin: {
-      auto left = getTable(tableRef->expr);
-      auto right = getTable(tableRef->expr2);
-      return JoinTable::create(left, right, tableRef->on, tableRef->opType);
-    } break;
-    case kExprOperator: {
-      if (tableRef->opType == kOpParenthesis) {
-        return getTable(tableRef->expr);
-      } else {
-        throw std::runtime_error("Unsupported expression type on getTable");
-      }
-    } break;
-    default:
-      throw std::runtime_error("Failed to get table");
+  if (tableRef->type == kExprOperator && tableRef->opType == kOpParenthesis) {
+    return getTable(tableRef->expr);
   }
+  if (tableRef->type != kExprTableRef) {
+    throw std::runtime_error("Unsupported expression type on getTable: " +
+                             std::to_string(tableRef->type));
+  }
+  if (tables_.count(tableRef->name) == 0) {
+    throw std::runtime_error("Table not found: " + tableRef->name);
+  }
+  return tables_.at(tableRef->name);
 }
 
 std::shared_ptr<ITable> Database::create(std::shared_ptr<CreateStatement> createStatement) {
@@ -123,16 +148,11 @@ std::shared_ptr<ITable> Database::create(std::shared_ptr<CreateStatement> create
     tables_[createStatement->tableName] = StorageTable::create(createStatement);
     return tables_[createStatement->tableName];
   } else if (createStatement->type == CreateType::kCreateTableAsSelect) {
-    return tables_[createStatement->tableName] =
-               StorageTable::create(createStatement, getTable(createStatement->sourceRef));
+    auto refTable = execute(plan(createStatement));
+    return tables_[createStatement->tableName] = StorageTable::create(createStatement, refTable);
   } else {
     throw std::runtime_error("Unsupported create type");
   }
-}
-
-std::shared_ptr<ITable> Database::select(std::shared_ptr<SelectStatement> selectStatement) const {
-  std::shared_ptr<ITable> table = getTable(selectStatement->fromSource);
-  return table->select(selectStatement);
 }
 
 std::shared_ptr<ITable> Database::insert(std::shared_ptr<InsertStatement> insertStatement) {

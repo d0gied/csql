@@ -31,51 +31,11 @@ std::shared_ptr<JoinTable> JoinTable::create(std::shared_ptr<ITable> left,
 
 std::shared_ptr<TableIterator> JoinTable::getIterator() {
   if (joinType_ == kOpInnerJoin) {
-    return std::make_shared<InnerJoinIterator>(shared_from_this());
+    return std::make_shared<InnerJoinIterator>(
+        std::dynamic_pointer_cast<JoinTable>(shared_from_this()));
   } else {
     throw std::runtime_error("Unsupported join type");
   }
-}
-
-const std::string& JoinTable::getName() const {
-  return name_;
-}
-
-const std::vector<std::shared_ptr<Column>>& JoinTable::getColumns() {
-  return columns_;
-}
-
-std::shared_ptr<Column> JoinTable::getColumn(std::shared_ptr<Expr> columnExpr) {
-  if (columnExpr->isType(kExprColumnRef)) {
-    if (!columnExpr->hasTable()) {
-      throw std::runtime_error("Join column must have table name: " + columnExpr->name);
-    }
-    for (const auto& column : columns_) {
-      if (column->refferedColumn()->getName() == columnExpr->name &&
-          column->refferedColumn()->table()->getName() == columnExpr->table) {
-        return column;
-      }
-    }
-    throw std::runtime_error("Column not found: " + columnExpr->toString());
-  } else {
-    throw std::runtime_error("Unsupported expression type: " + columnExpr->toString());
-  }
-}
-
-void JoinTable::insert(std::shared_ptr<InsertStatement> insertStatement) {
-  throw std::runtime_error("Insert not supported for join tables");
-}
-
-void JoinTable::delete_(std::shared_ptr<DeleteStatement> deleteStatement) {
-  throw std::runtime_error("Delete not supported for join tables");
-}
-
-void JoinTable::update(std::shared_ptr<UpdateStatement> updateStatement) {
-  throw std::runtime_error("Update not supported for join tables");
-}
-
-std::shared_ptr<VirtualTable> JoinTable::select(std::shared_ptr<SelectStatement> selectStatement) {
-  return SelectedTable::create(shared_from_this(), selectStatement);
 }
 
 JoinTableIterator::JoinTableIterator(std::shared_ptr<JoinTable> table)

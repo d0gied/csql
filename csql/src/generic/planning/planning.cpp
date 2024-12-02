@@ -20,22 +20,22 @@ enum class MermaidNodeType {
 
 void createMermaidNode(std::string& result, const std::string& name, const std::string& expr,
                        MermaidNodeType type = MermaidNodeType::kRectangle) {
-  result += "  ";
+  result += "  " + name;
   switch (type) {
     case MermaidNodeType::kCircle:
-      result += name + "((" + expr + "))";
+      result += "((\"" + expr + "\"))";
       break;
     case MermaidNodeType::kRectangle:
-      result += name + "[" + expr + "]";
+      result += "[\"" + expr + "\"]";
       break;
     case MermaidNodeType::kRhombus:
-      result += name + "{" + expr + "}";
+      result += "{\"" + expr + "\"}";
       break;
     case MermaidNodeType::kRectangleRounded:
-      result += name + "(" + expr + ")";
+      result += "(\"" + expr + "\")";
       break;
     default:
-      result += name + "[" + expr + "]";
+      result += "[\"" + expr + "\"]";
   }
   result += "\n";
 }
@@ -59,16 +59,17 @@ std::shared_ptr<QueryPlan> QueryPlan::create(std::shared_ptr<Expr> query,
   std::shared_ptr<QueryPlan> plan;
   switch (query->type) {
     case kExprSelect: {
-      plan = std::make_shared<QueryPlan>(QueryType::kStepFilter, query, db);
       std::shared_ptr<SelectStatement> select = query->select;
-      plan->left_ = create(select->fromSource, db);
-      plan->scanType_ = ScanType::kScanFullTable;  // only full table scan is supported
+      plan = std::make_shared<QueryPlan>(QueryType::kStepEval, query, db);
+      plan->left_ = std::make_shared<QueryPlan>(QueryType::kStepFilter, select->whereClause, db);
+      plan->left_->left_ =
+          std::make_shared<QueryPlan>(QueryType::kStepFullScan, select->fromSource, db);
+      plan->left_->left_->left_ = create(select->fromSource, db);
     } break;
     case kExprJoin: {
       plan = std::make_shared<QueryPlan>(QueryType::kStepJoin, query, db);
       plan->left_ = create(query->expr, db);
       plan->right_ = create(query->expr2, db);
-      plan->scanType_ = ScanType::kScanFullTable;  // only full of both tables is supported
     } break;
     case kExprTableRef: {
       plan = std::make_shared<QueryPlan>(QueryType::kStepProject, query, db);
@@ -94,19 +95,21 @@ void makeMermaid(std::string& result, const csql::storage::QueryPlan& plan,
   MermaidNodeType type = MermaidNodeType::kRectangle;
 
   if (plan.type_ == QueryType::kStepJoin) {
-    createMermaidNode(result, name,
-                      "\"Join<br>Cost: " + std::to_string(plan.getCost().self_steps) +
-                          "<br>Amount: " + std::to_string(plan.getCost().amount) + "\"",
-                      MermaidNodeType::kRectangleRounded);
+    createMermaidNode(result, name, "Join", MermaidNodeType::kRectangleRounded);
   } else if (plan.type_ == QueryType::kStepFilter) {
-    createMermaidNode(result, name,
-                      "\"Filter<br>Cost: " + std::to_string(plan.getCost().self_steps) + "\"",
-                      MermaidNodeType::kRectangleRounded);
+    createMermaidNode(result, name, "Filter", MermaidNodeType::kRectangleRounded);
+  } else if (plan.type_ == QueryType::kStepHashMerge) {
+    createMermaidNode(result, name, "HashMerge", MermaidNodeType::kRectangleRounded);
+  } else if (plan.type_ == QueryType::kStepSort) {
+    createMermaidNode(result, name, "Sort", MermaidNodeType::kRectangleRounded);
+  } else if (plan.type_ == QueryType::kStepEval) {
+    createMermaidNode(result, name, "Eval", MermaidNodeType::kRectangleRounded);
   } else if (plan.type_ == QueryType::kStepProject) {
-    createMermaidNode(result, name,
-                      "\"Project:" + plan.query_->name +
-                          "<br> Amount: " + std::to_string(plan.getCost().amount) + "\"",
-                      MermaidNodeType::kRectangle);
+    createMermaidNode(result, name, "Project: " + plan.query_->name, MermaidNodeType::kRectangle);
+  } else if (plan.type_ == QueryType::kStepFullScan) {
+    createMermaidNode(result, name, "FullScan", MermaidNodeType::kCircle);
+  } else if (plan.type_ == QueryType::kStepRangeScan) {
+    createMermaidNode(result, name, "RangeScan", MermaidNodeType::kCircle);
   } else {
     createMermaidNode(result, name, "\"Unknown\"", type);
   }
@@ -120,12 +123,32 @@ void makeMermaid(std::string& result, const csql::storage::QueryPlan& plan,
   }
 }
 
+std::string QueryPlan::toString() const {
+  switch (type_) {
+    case QueryType::kStepFullScan:
+      return "FullScan";
+    case QueryType::kStepRangeScan:
+      return "RangeScan";
+    case QueryType::kStepJoin:
+      return "Join";
+    case QueryType::kStepHashMerge:
+      return "HashMerge";
+    case QueryType::kStepSort:
+      return "Sort";
+    case QueryType::kStepFilter:
+      return "Filter";
+    case QueryType::kStepEval:
+      return "Eval";
+    case QueryType::kStepProject:
+      return "Project: " + query_->name;
+    default:
+      return "Unknown";
+  }
+}
+
 std::string QueryPlan::toMermaid(const std::string& name) const {
   std::string result = "graph TD\n";
   makeMermaid(result, *this, name);
-  createMermaidNode(result, "TOTAL", "\"Total cost: " + std::to_string(cost_.total_steps) + "\"",
-                    MermaidNodeType::kCircle);
-  connectMermaidNodes(result, name, "TOTAL");
   return result;
 }
 
@@ -140,26 +163,26 @@ Cost QueryPlan::calculateCost() {
     if (join_expr->opType == OperatorType::kOpInnerJoin ||
         join_expr->opType == OperatorType::kOpCrossJoin) {
       cost_ = Cost{
-          .total_steps = left.amount * right.amount + left.total_steps + right.total_steps,
-          .self_steps = left.amount * right.amount,
+          .total_steps = left.total_steps + left.amount * right.total_steps,
+          .self_steps = 0,
           .amount = left.amount + right.amount,
       };
     } else if (join_expr->opType == OperatorType::kOpLeftJoin) {
       cost_ = Cost{
-          .total_steps = left.amount * right.amount + left.total_steps + right.total_steps,
-          .self_steps = left.amount * right.amount,
+          .total_steps = left.total_steps + left.amount * right.total_steps,
+          .self_steps = 0,
           .amount = left.amount,
       };
     } else if (join_expr->opType == OperatorType::kOpRightJoin) {
       cost_ = Cost{
-          .total_steps = left.amount * right.amount + left.total_steps + right.total_steps,
-          .self_steps = left.amount * right.amount,
+          .total_steps = left.total_steps + left.amount * right.total_steps,
+          .self_steps = 0,
           .amount = right.amount,
       };
     } else if (join_expr->opType == OperatorType::kOpOuterJoin) {
       cost_ = Cost{
-          .total_steps = left.amount * right.amount + left.total_steps + right.total_steps,
-          .self_steps = left.amount * right.amount,
+          .total_steps = left.total_steps + left.amount * right.total_steps,
+          .self_steps = 0,
           .amount = left.amount * right.amount,
       };
     } else {
@@ -169,8 +192,8 @@ Cost QueryPlan::calculateCost() {
     auto left = left_->getCost();
     auto right = right_->getCost();
     cost_ = Cost{
-        .total_steps = left.amount + right.amount + left.total_steps + right.total_steps,
-        .self_steps = left.amount + right.amount,
+        .total_steps = left.total_steps + right.total_steps,
+        .self_steps = 0,
         .amount = left.amount + right.amount,
     };
   } else if (type_ == QueryType::kStepSort) {
@@ -184,8 +207,29 @@ Cost QueryPlan::calculateCost() {
     auto left = left_->getCost();
     // TODO: Implement better prediction by evaluating the where clause expression
     cost_ = Cost{
+        .total_steps = left.total_steps,
+        .self_steps = 0,
+        .amount = left.amount,
+    };
+  } else if (type_ == QueryType::kStepEval) {
+    auto left = left_->getCost();
+    cost_ = Cost{
+        .total_steps = left.total_steps,
+        .self_steps = 0,
+        .amount = left.amount,
+    };
+  } else if (type_ == QueryType::kStepFullScan) {
+    auto left = left_->getCost();
+    cost_ = Cost{
         .total_steps = left.total_steps + left.amount,
-        .self_steps = left.amount,
+        .self_steps = 0,
+        .amount = left.amount,
+    };
+  } else if (type_ == QueryType::kStepRangeScan) {
+    auto left = left_->getCost();
+    cost_ = Cost{
+        .total_steps = left.total_steps + left.amount,
+        .self_steps = 0,
         .amount = left.amount,
     };
   } else if (type_ == QueryType::kStepProject) {

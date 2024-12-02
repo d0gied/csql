@@ -8,6 +8,7 @@
 #include "memory/storage.h"
 #include "row.h"
 #include "sql/column_type.h"
+#include "sql/expr.h"
 #include "table.h"
 
 namespace {
@@ -15,7 +16,7 @@ using namespace csql;
 using namespace csql::storage;
 csql::storage::KeyComparator hash_comparator = [](std::shared_ptr<csql::storage::Cell> left,
                                                   std::shared_ptr<csql::storage::Cell> right) {
-  return left < right;  // Compare memory addresses (hash)
+  return left < right;
 };
 
 csql::storage::KeyComparator get_comparator(const std::vector<size_t>& keyColumns,
@@ -115,7 +116,6 @@ std::shared_ptr<StorageTable> StorageTable::create(std::shared_ptr<CreateStateme
   }
   table->name_ = createStatement->tableName;
   table->storage_ = std::make_shared<SetStorage>(get_comparator(keyColumns, keyColumnTypes));
-
   auto it = refTable->getIterator();
   while (it->hasValue()) {
     table->storage_->insert((*(*it))->cell_);
@@ -129,29 +129,8 @@ void StorageTable::addColumn(std::shared_ptr<Column> column) {
   column->table_ = shared_from_this();
 }
 
-const std::string& StorageTable::getName() const {
-  return name_;
-}
-
-const std::vector<std::shared_ptr<Column>>& StorageTable::getColumns() {
-  return columns_;
-}
-
 size_t StorageTable::getRowsCount() const {
   return storage_->size();
-}
-
-std::shared_ptr<Column> StorageTable::getColumn(std::shared_ptr<Expr> columnExpr) {
-  if (columnExpr->type == kExprColumnRef) {
-    for (const auto& column : columns_) {
-      if (column->getName() == columnExpr->name) {
-        return column;
-      }
-    }
-  } else {
-    throw std::runtime_error("Unsupported expression type: " + columnExpr->toString());
-  }
-  throw std::runtime_error("Column not found: " + columnExpr->toString());
 }
 
 void StorageTable::insert(std::shared_ptr<InsertStatement> insertStatement) {
@@ -245,9 +224,8 @@ void StorageTable::update(std::shared_ptr<UpdateStatement> updateStatement) {
   throw std::runtime_error("Update not supported on storage table");
 }
 
-std::shared_ptr<VirtualTable> StorageTable::select(
-    std::shared_ptr<SelectStatement> selectStatement) {
-  return SelectedTable::create(shared_from_this(), selectStatement);
+std::shared_ptr<VirtualTable> StorageTable::filter(std::shared_ptr<Expr> whereClause) {
+  return FilteredTable::create(shared_from_this(), whereClause);
 }
 
 std::shared_ptr<TableIterator> StorageTable::getIterator() {

@@ -12,16 +12,14 @@ class QueryPlan;
 class Database;
 
 enum class QueryType {
+  kStepFullScan,   // Full table scan
+  kStepRangeScan,  // Index range scan
   kStepJoin,       // Join two tables
   kStepHashMerge,  // Hash merge
   kStepSort,       // Sort (order by)
   kStepFilter,     // Filter (where clause)
+  kStepEval,       // Evaluate expression
   kStepProject,    // Project (select columns)
-};
-
-enum class ScanType {
-  kScanFullTable,  // Full table scan
-  kScanIndex,      // Scan index
 };
 
 struct Cost {
@@ -33,7 +31,7 @@ struct Cost {
 struct QueryPlan {
  public:
   QueryPlan(QueryType type, std::shared_ptr<Expr> query, std::shared_ptr<Database> db)
-      : type_(type), query_(query), scanType_(ScanType::kScanFullTable), db_(db) {}
+      : type_(type), query_(query), db_(db) {}
   static std::shared_ptr<QueryPlan> create(std::shared_ptr<Expr> query,
                                            std::shared_ptr<Database> db);
 
@@ -46,7 +44,6 @@ struct QueryPlan {
   Cost calculateCost();
 
   QueryType type_;
-  ScanType scanType_;
 
   std::shared_ptr<QueryPlan> left_;
   std::shared_ptr<QueryPlan> right_;
@@ -55,10 +52,13 @@ struct QueryPlan {
   std::weak_ptr<Database> db_;
   Cost cost_;
 
+  friend class Database;
+
  public:  // DEBUG
   std::string toMermaid(const std::string& name = "A") const;
   friend void makeMermaid(std::string& result, const csql::storage::QueryPlan& plan,
                           const std::string& name);
+  std::string toString() const;
 };
 
 // std::ostream& operator<<(std::ostream& os, const QueryPlan& stepPlan);

@@ -32,7 +32,6 @@ class Database : public std::enable_shared_from_this<Database> {
   std::shared_ptr<ITable> execute(std::shared_ptr<QueryPlan> plan);
 
   std::shared_ptr<ITable> create(std::shared_ptr<CreateStatement> createStatement);
-  std::shared_ptr<ITable> select(std::shared_ptr<SelectStatement> selectStatement) const;
   std::shared_ptr<ITable> insert(std::shared_ptr<InsertStatement> insertStatement);
   std::shared_ptr<ITable> delete_(std::shared_ptr<DeleteStatement> deleteStatement);
   std::shared_ptr<ITable> update(std::shared_ptr<UpdateStatement> updateStatement);
