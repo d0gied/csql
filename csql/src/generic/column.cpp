@@ -112,6 +112,10 @@ std::shared_ptr<Column> Column::refferedColumn() const {
   return reffered_column_;
 }
 
+std::shared_ptr<ITable> Column::table() const {
+  return table_.lock();
+}
+
 std::shared_ptr<Expr> Column::refferedExpr() const {
   return reffered_expr_;
 }

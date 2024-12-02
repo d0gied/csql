@@ -28,15 +28,12 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
   for (auto stmt : result->getStatements()) {
     if (stmt->is(kStmtCreate)) {
       create(std::dynamic_pointer_cast<CreateStatement>(stmt));
-      return nullptr;
     } else if (stmt->is(kStmtInsert)) {
       insert(std::dynamic_pointer_cast<InsertStatement>(stmt));
-      return nullptr;
     } else if (stmt->is(kStmtSelect)) {
       return select(std::dynamic_pointer_cast<SelectStatement>(stmt))->getIterator();
     } else if (stmt->is(kStmtDelete)) {
       delete_(std::dynamic_pointer_cast<DeleteStatement>(stmt));
-      return nullptr;
       // } else if (stmt->is(kStmtUpdate)) {
       //   return update(std::dynamic_pointer_cast<UpdateStatement>(stmt));
     } else {
@@ -59,8 +56,9 @@ std::shared_ptr<ITable> Database::getTable(std::shared_ptr<Expr> tableRef) const
       return select(tableRef->select);
     } break;
     case kExprJoin: {
-      throw std::runtime_error("Join not supported");
-      return nullptr;
+      auto left = getTable(tableRef->expr);
+      auto right = getTable(tableRef->expr2);
+      return JoinTable::create(left, right, tableRef->on, tableRef->opType);
     } break;
     case kExprOperator: {
       if (tableRef->opType == kOpParenthesis) {

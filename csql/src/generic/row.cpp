@@ -335,13 +335,7 @@ std::shared_ptr<Expr> Row::evaluate(std::shared_ptr<Expr> expr) {
     if (!table) {
       throw std::runtime_error("Table not found");
     }
-    if (expr->hasTable()) {
-      if (expr->table != table->getName()) {
-        throw std::runtime_error("Table name mismatch: " + expr->table + " vs. " +
-                                 table->getName());
-      }
-    }
-    return getColumnValue(expr->getName());
+    return getColumnValue(table->getColumn(expr));
   } else if (expr->isLiteral()) {
     return expr;
   } else if (expr->isType(kExprOperator)) {

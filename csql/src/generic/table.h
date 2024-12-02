@@ -153,10 +153,13 @@ class VirtualTable : public ITable {
   virtual ~VirtualTable() = default;
 };
 
-class JoinTable : public VirtualTable {
+class JoinTable : public VirtualTable, public std::enable_shared_from_this<JoinTable> {
  public:
-  JoinTable(std::shared_ptr<ITable> table1, std::shared_ptr<ITable> table2,
-            std::shared_ptr<Expr> onClause);
+  JoinTable(std::shared_ptr<ITable> left, std::shared_ptr<ITable> right,
+            std::shared_ptr<Expr> onClause, OperatorType joinType);
+  static std::shared_ptr<JoinTable> create(std::shared_ptr<ITable> left,
+                                           std::shared_ptr<ITable> right,
+                                           std::shared_ptr<Expr> onClause, OperatorType joinType);
   virtual ~JoinTable() = default;
 
   void insert(std::shared_ptr<InsertStatement> insertStatement) override;
@@ -169,10 +172,44 @@ class JoinTable : public VirtualTable {
   const std::vector<std::shared_ptr<Column>>& getColumns() override;
   std::shared_ptr<Column> getColumn(std::shared_ptr<Expr> columnExpr) override;
 
+  friend class JoinTableIterator;
+  friend class InnerJoinIterator;
+
  private:
-  std::shared_ptr<ITable> table1_;
-  std::shared_ptr<ITable> table2_;
+  std::shared_ptr<ITable> left_;
+  std::shared_ptr<ITable> right_;
   std::shared_ptr<Expr> onClause_;
+  OperatorType joinType_;
+  std::string name_;
+  std::vector<std::shared_ptr<Column>> columns_;
+};
+
+class JoinTableIterator : public TableIterator {
+ public:
+  JoinTableIterator(std::shared_ptr<JoinTable> table);
+  virtual ~JoinTableIterator() = default;
+
+  virtual bool hasValue() const override;
+  // virtual JoinTableIterator& operator++() override;
+  virtual std::shared_ptr<Row> operator*() override;
+  virtual std::shared_ptr<Iterator> getMemoryIterator() override;
+
+ protected:
+  std::shared_ptr<JoinTable> table_;
+  std::shared_ptr<TableIterator> leftTableIterator_;
+  std::shared_ptr<TableIterator> rightTableIterator_;
+  std::shared_ptr<Row> row_;
+
+  bool match();
+  void resetRight();
+  std::shared_ptr<Row> mergeRows();
+};
+
+class InnerJoinIterator : public JoinTableIterator {
+ public:
+  InnerJoinIterator(std::shared_ptr<JoinTable> table);
+  virtual ~InnerJoinIterator() = default;
+  InnerJoinIterator& operator++() override;
 };
 
 class SelectedTable : public VirtualTable, public std::enable_shared_from_this<SelectedTable> {

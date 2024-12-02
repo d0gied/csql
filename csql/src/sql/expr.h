@@ -59,6 +59,13 @@ enum OperatorType {
   kOpIsNull,       // IS NULL
   kOpExists,       // EXISTS
   kOpParenthesis,  // (expr)
+
+  // Join operators.
+  kOpInnerJoin,  // INNER JOIN
+  kOpOuterJoin,  // OUTER JOIN
+  kOpLeftJoin,   // LEFT JOIN
+  kOpRightJoin,  // RIGHT JOIN
+  kOpCrossJoin,  // CROSS JOIN
 };
 
 bool isUnaryOperator(OperatorType op);
@@ -81,6 +88,7 @@ struct Expr {
   // TODO: Replace expressions by list.
   std::shared_ptr<Expr> expr;
   std::shared_ptr<Expr> expr2;
+  std::shared_ptr<Expr> on;
   std::shared_ptr<SelectStatement> select;
   std::string name;
   std::string alias;
@@ -120,7 +128,8 @@ struct Expr {
   static std::shared_ptr<Expr> makeParameter(int id);
   static std::shared_ptr<Expr> makeSelect(std::shared_ptr<SelectStatement> select);
   static std::shared_ptr<Expr> makeJoin(std::shared_ptr<Expr> source1,
-                                        std::shared_ptr<Expr> source2, std::shared_ptr<Expr> on);
+                                        std::shared_ptr<Expr> source2, std::shared_ptr<Expr> on,
+                                        OperatorType joinType);
 
   // Debugging.
   std::string toMermaid(const std::string node_name = "A", bool subexpr = false) const;

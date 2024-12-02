@@ -68,6 +68,7 @@ void SQLParserResult::setErrorDetails(std::string errorMsg, int errorLine, int e
   errorLine_ = errorLine;
   errorColumn_ = errorColumn;
   token_ = token;
+  std::cout << this->errorMsg() << std::endl;
 }
 
 const std::vector<std::shared_ptr<SQLStatement>>& SQLParserResult::getStatements() const {

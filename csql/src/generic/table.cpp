@@ -125,7 +125,7 @@ void ITable::exportToCSV(const std::string& filename) {
       } else if (column->type().data_type == DataType::STRING) {
         file << row->get<std::string>(i);
       } else if (column->type().data_type == DataType::INT32) {
-        file << row->get<int32_t>(i);
+        file << std::to_string(row->get<int32_t>(i));
       } else if (column->type().data_type == DataType::BOOL) {
         file << (row->get<bool>(i) ? "true" : "false");
       } else if (column->type().data_type == DataType::BYTES) {

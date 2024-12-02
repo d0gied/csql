@@ -40,6 +40,7 @@ class Row {
   friend class Iterator;
   friend class WhereClauseIterator;
   friend class SelectedTableIterator;
+  friend class JoinTableIterator;
 
  private:
   std::shared_ptr<Expr> evaluate(std::shared_ptr<Expr> expr);

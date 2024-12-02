@@ -37,6 +37,7 @@ class Column : public std::enable_shared_from_this<Column> {
   std::shared_ptr<Column> clone(std::shared_ptr<ITable> table, const std::string& name = "");
   std::shared_ptr<Column> refferedColumn() const;
   std::shared_ptr<Expr> refferedExpr() const;
+  std::shared_ptr<ITable> table() const;
 
   const ColumnType& type() const;
   friend std::ostream& operator<<(std::ostream& stream, const Column& column);

@@ -248,15 +248,16 @@ std::shared_ptr<Expr> Expr::makeSelect(std::shared_ptr<SelectStatement> select) 
   return e;
 }
 
-// std::shared_ptr<Expr> Expr::makeJoin(std::shared_ptr<Expr> source1, std::shared_ptr<Expr>
-// source2,
-//                                      std::shared_ptr<Expr> on) {
-//   std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprJoin);
-//   e->expr = source1;
-//   e->expr2 = source2;
-//   e->select = on;
-//   return e;
-// }
+std::shared_ptr<Expr> Expr::makeJoin(std::shared_ptr<Expr> source1, std::shared_ptr<Expr> source2,
+                                     std::shared_ptr<Expr> on, OperatorType joinType) {
+  std::shared_ptr<Expr> e = std::make_shared<Expr>(kExprJoin);
+  e->opType = joinType;
+  e->expr = source1;
+  e->expr2 = source2;
+  e->on = on;
+
+  return e;
+}
 
 bool Expr::isType(ExprType exprType) const {
   return exprType == type;
@@ -390,6 +391,29 @@ std::ostream& operator<<(std::ostream& stream, const Expr& expr) {
         stream << "UNKNOWN_OPERATOR";
       }
 
+    } break;
+    case kExprJoin: {
+      std::string join_type;
+      switch (expr.opType) {
+        case kOpLeftJoin:
+          join_type = "LEFT JOIN";
+          break;
+        case kOpRightJoin:
+          join_type = "RIGHT JOIN";
+          break;
+        case kOpOuterJoin:
+          join_type = "OUTER JOIN";
+          break;
+        case kOpInnerJoin:
+          join_type = "INNER JOIN";
+          break;
+        case kOpCrossJoin:
+          join_type = "CROSS JOIN";
+          break;
+        default:
+          join_type = "UNKNOWN_JOIN";
+      }
+      stream << *expr.expr << " " << join_type << " " << *expr.expr2 << " ON " << *expr.on;
     } break;
     case kExprSelect:
       stream << *expr.select;

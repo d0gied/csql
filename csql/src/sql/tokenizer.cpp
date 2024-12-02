@@ -12,6 +12,13 @@ std::string uppercase(const std::string &str) {
   std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
   return upper;
 }
+
+std::string strip(const std::string &str) {
+  std::string s = str;
+  s.erase(std::remove_if(s.begin(), s.end(), ::isspace), s.end());
+  return s;
+}
+
 }  // namespace
 
 namespace csql {
@@ -63,7 +70,7 @@ const Token SQLTokenizer::get() {
 
   if (boost::regex_match(value, boost::regex(token::KEYWORDS, boost::regex::icase))) {
     type = TokenType::KEYWORD;
-    value = uppercase(value);
+    value = strip(uppercase(value));
   } else if (boost::regex_match(value, boost::regex(token::TYPE, boost::regex::icase))) {
     type = TokenType::TYPE;
     value = uppercase(value);

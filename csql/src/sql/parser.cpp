@@ -3,6 +3,7 @@
 #include <boost/regex.hpp>
 #include <boost/regex/v5/regex_match.hpp>
 #include <cstring>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -331,15 +332,40 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
   boost::regex re(until.data());
   while (token.type != csql::TokenType::TERMINAL && !boost::regex_match(token.value, re)) {
     if (token.type != csql::TokenType::OPERATOR && token.value != "OR" && token.value != "AND" &&
-        token.value != "IS NULL" && token.value != "IS NOT NULL") {
+        token.value != "IS NULL" && token.value != "IS NOT NULL" && token.value != "JOIN" &&
+        token.value != "INNER" && token.value != "LEFT" && token.value != "RIGHT" &&
+        token.value != "FULL" && token.value != "CROSS") {
       result->setErrorDetails("Expected operator", 0, 0, token);
       return nullptr;
     }
 
     csql::OperatorType op;
     if (isTableRef) {
-      result->setErrorDetails("Table reference cannot have operators", 0, 0, token);
-      return nullptr;
+      if (token.value == "INNER") {
+        op = csql::OperatorType::kOpInnerJoin;
+        token = tokenizer.nextToken();
+      } else if (token.value == "LEFT") {
+        op = csql::OperatorType::kOpLeftJoin;
+        token = tokenizer.nextToken();
+      } else if (token.value == "RIGHT") {
+        op = csql::OperatorType::kOpRightJoin;
+        token = tokenizer.nextToken();
+      } else if (token.value == "FULL") {
+        op = csql::OperatorType::kOpOuterJoin;
+        token = tokenizer.nextToken();
+      } else if (token.value == "CROSS") {
+        op = csql::OperatorType::kOpCrossJoin;
+        token = tokenizer.nextToken();
+      } else if (token.value == "JOIN") {
+        op = csql::OperatorType::kOpInnerJoin;
+      } else {
+        result->setErrorDetails("Unknown join type: " + token.value, 0, 0, token);
+        return nullptr;
+      }
+      if (token.value != "JOIN") {
+        result->setErrorDetails("Expected JOIN", 0, 0, token);
+        return nullptr;
+      }
     } else {
       if (token.value == "OR") {
         op = csql::OperatorType::kOpOr;
@@ -382,6 +408,24 @@ std::shared_ptr<csql::Expr> parseExpr(csql::SQLTokenizer &tokenizer,
       return nullptr;
     } else if (op == csql::OperatorType::kOpIsNull) {
       left = applyOpOnSameLevel(left, op, nullptr, token.value == "IS NOT NULL");
+    } else if (op == csql::OperatorType::kOpLeftJoin || op == csql::OperatorType::kOpRightJoin ||
+               op == csql::OperatorType::kOpOuterJoin || op == csql::OperatorType::kOpInnerJoin ||
+               op == csql::OperatorType::kOpCrossJoin) {
+      std::shared_ptr<csql::Expr> right = parseExpr(tokenizer, result, "", true);
+      if (!right) {
+        return nullptr;
+      }
+      token = tokenizer.nextToken();
+      if (token.value != "ON") {
+        result->setErrorDetails("Expected ON", 0, 0, token);
+        return nullptr;
+      }
+      std::shared_ptr<csql::Expr> on = parseExpr(tokenizer, result, until);
+      if (!on) {
+        return nullptr;
+      }
+      left = csql::Expr::makeJoin(left, right, on, op);
+      return left;  // join is the last operator
     } else {
       std::shared_ptr<csql::Expr> right = parseExpr(tokenizer, result);
       if (!right) {
@@ -442,6 +486,11 @@ std::shared_ptr<csql::SelectStatement> parseSelect(csql::SQLTokenizer &tokenizer
   std::shared_ptr<csql::SelectStatement> selectStatement =
       std::make_shared<csql::SelectStatement>();
   selectStatement->fromSource = parseExpr(tokenizer, result, "", true);
+  if (!selectStatement->fromSource) {
+    std::cout << "Error parsing from source" << std::endl;
+    return nullptr;
+  }
+  std::cout << "From source: " << selectStatement->fromSource->toString() << std::endl;
   selectStatement->selectList = selectList;
 
   token = tokenizer.nextToken();
@@ -463,7 +512,7 @@ bool parseCreateTable(csql::SQLTokenizer &tokenizer,
                       std::shared_ptr<csql::SQLParserResult> result) {
   csql::Token token = tokenizer.nextToken();
   if (token.type != csql::TokenType::NAME) {
-    result->setErrorDetails("Expected table name", 0, 0, token);
+    result->setErrorDetails("Expected table name on create table", 0, 0, token);
     return false;
   }
   std::string tableName = token.value;
@@ -628,28 +677,36 @@ bool SQLParser::parse(const std::string &sql, std::shared_ptr<SQLParserResult> r
 
   Token token = tokenizer.nextToken();
 
-  if (token.type != TokenType::KEYWORD) {
-    result->setErrorDetails("Expected keyword at the beginning of the query", 0, 0, token);
-    return false;
-  }
-
-  if (token.value == "CREATE") {
-    return parseCreate(tokenizer, result);
-  } else if (token.value == "INSERT") {
-    return parseInsert(tokenizer, result);
-  } else if (token.value == "SELECT") {
-    auto selectStatement = parseSelect(tokenizer, result);
-    if (selectStatement && result->isValid()) {
-      result->addStatement(selectStatement);
-      return true;
+  while (token.type != TokenType::TERMINAL) {
+    if (token.type != TokenType::KEYWORD) {
+      result->setErrorDetails("Expected keyword at the beginning of the query", 0, 0, token);
+      return false;
     }
-    return false;
-  } else if (token.value == "DELETE") {
-    return parseDelete(tokenizer, result);
+
+    if (token.value == "CREATE") {
+      if (!parseCreate(tokenizer, result)) return false;
+    } else if (token.value == "INSERT") {
+      if (!parseInsert(tokenizer, result)) return false;
+    } else if (token.value == "SELECT") {
+      auto selectStatement = parseSelect(tokenizer, result);
+      if (!selectStatement || !result->isValid()) return false;
+      result->addStatement(selectStatement);
+    } else if (token.value == "DELETE") {
+      if (!parseDelete(tokenizer, result)) return false;
+    } else {
+      result->setErrorDetails("Unknown keyword", 0, 0, token);
+      return false;
+    }
+    token = tokenizer.nextToken();
+    if (token.type != csql::TokenType::TERMINAL) {
+      result->setErrorDetails("Expected end of query", 0, 0, token);
+      return false;
+    }
+
+    token = tokenizer.nextToken();
   }
 
-  result->setErrorDetails("Unknown keyword", 0, 0, token);
-  return false;
+  return true;
 }
 
 }  // namespace csql
