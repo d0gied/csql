@@ -38,6 +38,12 @@
   - [ ] GROUP BY clause
   - [ ] LIMIT clause
   - [ ] OFFSET clause
+- [x] Join Clause
+  - [x] INNER JOIN
+  - [ ] LEFT JOIN
+  - [ ] RIGHT JOIN
+  - [ ] FULL JOIN
+  - [ ] CROSS JOIN
 - [x] Insert data into a table
   - [x] Insert into a table
     - [x] Explicit column specification
@@ -57,5 +63,3 @@
 - [x] Import data from a file
   - [x] Import from a CSV file
   - [ ] Import from a BINARY file
-
-Progress: 13/30 (43.33%)

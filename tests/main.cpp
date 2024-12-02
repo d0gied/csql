@@ -41,7 +41,9 @@ CREATE TABLE joined_posts AS (
   SELECT
     users.login as username,
     posts.title as title,
-    posts.content as content 
+    (|posts.title|) as title_length,
+    posts.content as content,
+    (|posts.content|) as content_length
   FROM (users JOIN posts ON users.id = posts.user_id) WHERE users.is_admin = false
 );
 )");
