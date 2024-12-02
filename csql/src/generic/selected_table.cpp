@@ -4,7 +4,6 @@
 
 #include "column.h"
 #include "memory/cell.h"
-#include "memory/dummy.h"
 #include "row.h"
 #include "sql/expr.h"
 #include "sql/statements/create.h"

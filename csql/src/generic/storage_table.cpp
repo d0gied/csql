@@ -4,22 +4,98 @@
 #include <vector>
 
 #include "column.h"
-#include "memory/dummy.h"
+#include "memory/set_storage.h"
+#include "memory/storage.h"
 #include "row.h"
+#include "sql/column_type.h"
 #include "table.h"
+
+namespace {
+using namespace csql;
+using namespace csql::storage;
+csql::storage::KeyComparator hash_comparator = [](std::shared_ptr<csql::storage::Cell> left,
+                                                  std::shared_ptr<csql::storage::Cell> right) {
+  return left < right;  // Compare memory addresses (hash)
+};
+
+csql::storage::KeyComparator get_comparator(const std::vector<size_t>& keyColumns,
+                                            const std::vector<csql::ColumnType>& keyColumnTypes) {
+  if (keyColumns.empty()) {
+    return hash_comparator;
+  }
+  if (keyColumns.size() != keyColumnTypes.size()) {
+    throw std::runtime_error("Key columns and types size mismatch");
+  }
+  return [keyColumns, keyColumnTypes](std::shared_ptr<Cell> left, std::shared_ptr<Cell> right) {
+    for (size_t i = 0; i < keyColumns.size(); i++) {
+      switch (keyColumnTypes[i].data_type) {
+        case DataType::INT32: {
+          auto leftValue = left->get<int32_t>(keyColumns[i]);
+          auto rightValue = right->get<int32_t>(keyColumns[i]);
+          if (leftValue != rightValue) {
+            return leftValue < rightValue;
+          }
+        } break;
+        case DataType::STRING: {
+          auto leftValue = left->get<std::string>(keyColumns[i]);
+          auto rightValue = right->get<std::string>(keyColumns[i]);
+          if (leftValue != rightValue) {
+            return leftValue < rightValue;
+          }
+        } break;
+        case DataType::BOOL: {
+          auto leftValue = left->get<bool>(keyColumns[i]);
+          auto rightValue = right->get<bool>(keyColumns[i]);
+          if (leftValue != rightValue) {
+            return leftValue < rightValue;
+          }
+        } break;
+        case DataType::BYTES: {
+          int64_t size = keyColumnTypes[i].length;
+          auto leftBytes = left->getBytes(keyColumns[i], size);
+          auto rightBytes = right->getBytes(keyColumns[i], size);
+          for (size_t j = 0; j < size; j++) {
+            if (leftBytes[size - j - 1] != rightBytes[size - j - 1]) {
+              return leftBytes[j] < rightBytes[j];
+            }
+          }
+        } break;
+        default:
+          throw std::runtime_error("Unknown data type");
+          break;
+      }
+    }
+    return false;  // Equal
+  };
+}
+
+}  // namespace
 
 namespace csql {
 namespace storage {
-StorageTable::StorageTable() : storage_(std::make_shared<DummyStorage>()) {}
+StorageTable::StorageTable() {}
 
 StorageTable::~StorageTable() {}
 
 std::shared_ptr<StorageTable> StorageTable::create(
     std::shared_ptr<CreateStatement> createStatement) {
   std::shared_ptr<StorageTable> table = std::make_shared<StorageTable>();
-  for (const auto& column : *createStatement->columns) {
-    table->addColumn(Column::create(column));
+
+  std::vector<size_t> keyColumns;
+  std::vector<ColumnType> keyColumnTypes;
+
+  size_t i = 0;
+  for (const auto& columnDef : *createStatement->columns) {
+    auto column = Column::create(columnDef);
+    table->addColumn(column);
+    if (column->isKey()) {
+      keyColumns.push_back(i);
+      keyColumnTypes.push_back(column->type());
+    }
   }
+
+  table->storage_ = std::make_shared<SetStorage>(get_comparator(keyColumns, keyColumnTypes));
+
   table->name_ = createStatement->tableName;
   return table;
 }
@@ -27,10 +103,19 @@ std::shared_ptr<StorageTable> StorageTable::create(
 std::shared_ptr<StorageTable> StorageTable::create(std::shared_ptr<CreateStatement> createStatement,
                                                    std::shared_ptr<ITable> refTable) {
   std::shared_ptr<StorageTable> table = std::make_shared<StorageTable>();
-  for (auto column : refTable->getColumns()) {
-    table->addColumn(column->clone(table));
+  std::vector<size_t> keyColumns;
+  std::vector<ColumnType> keyColumnTypes;
+  for (auto refColumn : refTable->getColumns()) {
+    auto column = refColumn->clone(table);
+    table->addColumn(column);
+    if (column->isKey()) {
+      keyColumns.push_back(table->columns_.size() - 1);
+      keyColumnTypes.push_back(column->type());
+    }
   }
   table->name_ = createStatement->tableName;
+  table->storage_ = std::make_shared<SetStorage>(get_comparator(keyColumns, keyColumnTypes));
+
   auto it = refTable->getIterator();
   while (it->hasValue()) {
     table->storage_->insert((*(*it))->cell_);

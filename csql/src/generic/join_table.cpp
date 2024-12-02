@@ -159,6 +159,5 @@ InnerJoinIterator& InnerJoinIterator::operator++() {
 
   return *this;
 }
-
 }  // namespace storage
 }  // namespace csql

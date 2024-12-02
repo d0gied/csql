@@ -212,6 +212,13 @@ class InnerJoinIterator : public JoinTableIterator {
   InnerJoinIterator& operator++() override;
 };
 
+class OuterJoinIterator : public JoinTableIterator {
+ public:
+  OuterJoinIterator(std::shared_ptr<JoinTable> table);
+  virtual ~OuterJoinIterator() = default;
+  OuterJoinIterator& operator++() override;
+};
+
 class SelectedTable : public VirtualTable, public std::enable_shared_from_this<SelectedTable> {
  public:
   SelectedTable(std::shared_ptr<ITable> table, std::shared_ptr<SelectStatement> selectStatement);
