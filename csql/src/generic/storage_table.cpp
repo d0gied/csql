@@ -52,6 +52,10 @@ const std::vector<std::shared_ptr<Column>>& StorageTable::getColumns() {
   return columns_;
 }
 
+size_t StorageTable::getRowsCount() const {
+  return storage_->size();
+}
+
 std::shared_ptr<Column> StorageTable::getColumn(std::shared_ptr<Expr> columnExpr) {
   if (columnExpr->type == kExprColumnRef) {
     for (const auto& column : columns_) {

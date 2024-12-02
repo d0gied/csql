@@ -1,4 +1,5 @@
 #include <iostream>
+#include <iterator>
 #include <string>
 
 #include "csql.h"
@@ -35,8 +36,7 @@ insert (login = "admin", password_hash = "12345678", is_admin = true) to users;
     }
   }
 
-  db.execute(
-      R"(
+  std::string query = R"(
 CREATE TABLE joined_posts AS (
   SELECT
     users.login as username,
@@ -44,9 +44,16 @@ CREATE TABLE joined_posts AS (
     (|posts.title|) as title_length,
     posts.content as content,
     (|posts.content|) as content_length
-  FROM (users JOIN posts ON users.id = posts.user_id) WHERE users.is_admin = false
+  FROM (users JOIN posts ON users.id = posts.user_id)
+  WHERE users.is_admin = false
 );
-)");
+)";
+
+  auto plan = db.plan(query);
+
+  std::cout << "Plan: " << std::endl << plan->toMermaid() << std::endl;
+
+  db.execute(query);
 
   db.exportTableToCSV("users", "users.csv");
   db.exportTableToCSV("posts", "posts.csv");

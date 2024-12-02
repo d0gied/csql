@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 
+#include "planning/planning.h"
 #include "row.h"
 #include "sql/expr.h"
 #include "sql/parser.h"
@@ -41,6 +42,45 @@ std::shared_ptr<TableIterator> Database::execute(const std::string& sql) {
     }
   }
 
+  return nullptr;
+}
+
+std::shared_ptr<QueryPlan> Database::plan(std::shared_ptr<SQLStatement> statement) {
+  if (statement->is(kStmtSelect)) {
+    auto select = std::dynamic_pointer_cast<SelectStatement>(statement);
+    return QueryPlan::create(Expr::makeSelect(select), shared_from_this());
+  } else if (statement->is(kStmtCreate)) {
+    auto create = std::dynamic_pointer_cast<CreateStatement>(statement);
+    if (create->type != CreateType::kCreateTableAsSelect) {
+      throw std::runtime_error("Only CREATE TABLE AS is supported for planning");
+    }
+    auto db = shared_from_this();
+    return QueryPlan::create(create->sourceRef, db);
+  } else if (statement->is(kStmtInsert)) {
+    throw std::runtime_error("INSERT not supported for planning");
+  } else if (statement->is(kStmtDelete)) {
+    throw std::runtime_error("DELETE not supported for planning");
+  } else {
+    throw std::runtime_error("Unsupported statement");
+  }
+}
+
+std::shared_ptr<QueryPlan> Database::plan(const std::string& sql) {
+  std::shared_ptr<SQLParserResult> result = std::make_shared<SQLParserResult>();
+  SQLParser::parse(sql, result);
+
+  if (!result->isValid()) {
+    throw std::runtime_error(result->errorMsg());
+  }
+
+  if (result->getStatements().size() != 1) {
+    throw std::runtime_error("Only one statement is supported for planning");
+  }
+  return plan(result->getStatement(0));
+}
+
+std::shared_ptr<ITable> Database::execute(std::shared_ptr<QueryPlan> plan) {
+  // return execute(plan->optimize());
   return nullptr;
 }
 

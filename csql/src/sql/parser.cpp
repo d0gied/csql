@@ -490,7 +490,6 @@ std::shared_ptr<csql::SelectStatement> parseSelect(csql::SQLTokenizer &tokenizer
     std::cout << "Error parsing from source" << std::endl;
     return nullptr;
   }
-  std::cout << "From source: " << selectStatement->fromSource->toString() << std::endl;
   selectStatement->selectList = selectList;
 
   token = tokenizer.nextToken();

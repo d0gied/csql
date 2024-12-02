@@ -91,9 +91,8 @@ class ITable {
 
   virtual ColumnType predictType(std::shared_ptr<Expr> expr);
 
-  // virtual std::shared_ptr<VirtualTable> select(std::shared_ptr<Expr> whereClause) = 0;
-  // virtual std::shared_ptr<VirtualTable> join(std::shared_ptr<ITable> table,
-  //                                            std::shared_ptr<Expr> onClause) = 0;
+  static std::shared_ptr<ITable> hashMerge(std::shared_ptr<ITable> left,
+                                           std::shared_ptr<ITable> right);
 
   virtual void exportToCSV(const std::string& filename);
 };  // namespace storage
@@ -117,6 +116,7 @@ class StorageTable : public ITable, public std::enable_shared_from_this<StorageT
   const std::string& getName() const override;
   const std::vector<std::shared_ptr<Column>>& getColumns() override;
   std::shared_ptr<Column> getColumn(std::shared_ptr<Expr> columnExpr) override;
+  size_t getRowsCount() const;
 
  private:
   void addColumn(std::shared_ptr<Column> column);
