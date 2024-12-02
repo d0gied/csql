@@ -123,7 +123,7 @@ void ITable::exportToCSV(const std::string& filename) {
       if (row->isNull(i)) {
         file << "null";
       } else if (column->type().data_type == DataType::STRING) {
-        file << row->get<std::string>(i);
+        file << "\"" << row->get<std::string>(i) << "\"";
       } else if (column->type().data_type == DataType::INT32) {
         file << std::to_string(row->get<int32_t>(i));
       } else if (column->type().data_type == DataType::BOOL) {
